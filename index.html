@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -77,6 +78,41 @@ let material = "";
 let date = "";
 let lastCount = null;
 
+const GITHUB_REPO = "Brandonmcgirl/Case-tracker";
+const WORKFLOW_FILE = "update-log.yml";
+
+// Load existing log
+async function loadLog() {
+  try {
+    const res = await fetch("log.json?" + new Date().getTime());
+    const data = await res.json();
+    displayLog(data);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function displayLog(entries) {
+  const logDiv = document.getElementById("log");
+  logDiv.innerHTML = "";
+  entries.forEach(entry => {
+    const diff = entry.diff || 0;
+    const div = document.createElement("div");
+    div.className = "log-entry";
+    div.innerHTML = `${entry.time} | ${entry.material} | ${entry.count} <b>(+${diff})</b>`;
+    logDiv.appendChild(div);
+  });
+
+  if (entries.length) {
+    const last = entries[entries.length-1];
+    document.getElementById("summary").innerHTML =
+      `<b>${last.date}</b><br>Material: ${last.material}<br>Last Count: ${last.count}`;
+    lastCount = last.count;
+    material = last.material;
+    date = last.date;
+  }
+}
+
 function setDaily() {
   date = document.getElementById("date").value || new Date().toDateString();
   material = document.getElementById("material").value;
@@ -92,7 +128,7 @@ function setDaily() {
   document.getElementById("log").innerHTML = "";
 }
 
-function addEntry() {
+async function addEntry() {
   if (lastCount === null) {
     alert("Set the day first");
     return;
@@ -106,17 +142,27 @@ function addEntry() {
   const diff = count - lastCount;
   lastCount = count;
 
-  const entry = document.createElement("div");
-  entry.className = "log-entry";
-  entry.innerHTML = `${time} | ${material} | ${count} <b>(+${diff})</b>`;
+  const entryObj = { date, time, material, count, diff };
 
-  document.getElementById("log").appendChild(entry);
+  // Trigger GitHub Actions workflow WITHOUT exposing PAT
+  await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github.v3+json"
+    },
+    body: JSON.stringify({
+      ref: "main",
+      inputs: { new_entry: JSON.stringify(entryObj), reset: "false" }
+    })
+  });
 
+  // Refresh log locally
+  loadLog();
   document.getElementById("time").value = "";
   document.getElementById("count").value = "";
 }
 
-function resetDay() {
+async function resetDay() {
   if (!confirm("Reset for new day?")) return;
 
   material = "";
@@ -128,8 +174,27 @@ function resetDay() {
   document.getElementById("date").value = "";
   document.getElementById("material").value = "";
   document.getElementById("startCount").value = "";
-}
-</script>
 
+  // Trigger reset workflow
+  await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github.v3+json"
+    },
+    body: JSON.stringify({
+      ref: "main",
+      inputs: { new_entry: "{}", reset: "true" }
+    })
+  });
+
+  loadLog();
+}
+
+// Auto-refresh every 20 seconds
+setInterval(loadLog, 20000);
+
+// Load log on page load
+loadLog();
+</script>
 </body>
 </html>

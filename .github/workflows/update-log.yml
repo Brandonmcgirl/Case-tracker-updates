@@ -1,7 +1,7 @@
 name: Update Log
 
 on:
-  workflow_dispatch: # allows manual/API trigger
+  workflow_dispatch:
 
 jobs:
   update:
@@ -9,23 +9,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Read existing log
-        id: readlog
+      - name: Ensure log.json exists
         run: |
           if [ ! -f log.json ]; then echo "[]" > log.json; fi
-          echo "::set-output name=data::$(cat log.json | jq -c .)"
 
       - name: Update log
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           NEW_ENTRY='${{ github.event.inputs.new_entry }}'
           RESET='${{ github.event.inputs.reset }}'
+
           if [ "$RESET" == "true" ]; then
             echo "[]" > log.json
           else
-            echo '${{ steps.readlog.outputs.data }}' | jq ". + [ $NEW_ENTRY ]" > log.json
+            # Append the new entry to log.json
+            echo "$(cat log.json | jq '. + [ $NEW_ENTRY | fromjson ]')" > log.json
           fi
+
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add log.json
-          git commit -m "Update log"
-          git push
+          # Only commit if there are changes
+          git diff --cached --quiet || git commit -m "Update log"
+          git push https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git
