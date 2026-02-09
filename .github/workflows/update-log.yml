@@ -2,34 +2,49 @@ name: Update Log
 
 on:
   workflow_dispatch:
+    inputs:
+      key:
+        description: "Write key"
+        required: true
+      new_entry:
+        required: true
+      reset:
+        required: true
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
+
+      - name: Verify write key
+        run: |
+          if [ "${{ github.event.inputs.key }}" != "${{ secrets.WRITE_KEY }}" ]; then
+            echo "Invalid write key"
+            exit 1
+          fi
 
       - name: Ensure log.json exists
         run: |
           if [ ! -f log.json ]; then echo "[]" > log.json; fi
 
-      - name: Update log
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+      - name: Update log.json
         run: |
           NEW_ENTRY='${{ github.event.inputs.new_entry }}'
           RESET='${{ github.event.inputs.reset }}'
 
-          if [ "$RESET" == "true" ]; then
+          if [ "$RESET" = "true" ]; then
             echo "[]" > log.json
           else
-            # Append the new entry to log.json
-            echo "$(cat log.json | jq '. + [ $NEW_ENTRY | fromjson ]')" > log.json
+            cat log.json | jq ". + [ $NEW_ENTRY | fromjson ]" > tmp.json
+            mv tmp.json log.json
           fi
 
+      - name: Commit and push
+        run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add log.json
-          # Only commit if there are changes
           git diff --cached --quiet || git commit -m "Update log"
-          git push https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git
+          git push
