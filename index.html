@@ -5,42 +5,14 @@
 <title>Hourly Case Tracker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: #e5e7eb;
-  padding: 20px;
-}
+body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; padding: 20px; }
 h1 { margin-bottom: 10px; }
-input, button {
-  width: 100%;
-  padding: 10px;
-  margin: 6px 0;
-  font-size: 16px;
-}
-button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 6px;
-}
-button.reset {
-  background: #dc2626;
-}
-.card {
-  background: #020617;
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 15px;
-}
-.log {
-  border-top: 1px solid #334155;
-  margin-top: 10px;
-  padding-top: 10px;
-}
-.log-entry {
-  margin-bottom: 6px;
-}
+input, button { width: 100%; padding: 10px; margin: 6px 0; font-size: 16px; }
+button { background: #2563eb; color: white; border: none; border-radius: 6px; }
+button.reset { background: #dc2626; }
+.card { background: #020617; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+.log { border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px; }
+.log-entry { margin-bottom: 6px; }
 small { color: #94a3b8; }
 </style>
 </head>
@@ -76,14 +48,15 @@ let material = "";
 let date = "";
 let lastCount = null;
 
-// Your phone's server IP
-const SERVER_URL = "http://192.0.0.2:5000";
+// Use your phone's Termux IP
+const SERVER_URL = "http://192.0.0.2:5000";  // <-- REPLACE with your actual LAN IP
 
-// Load log from server
 async function loadLog() {
   try {
     const res = await fetch(`${SERVER_URL}/log.json?` + new Date().getTime());
+    console.log("Load log response:", res);
     const data = await res.json();
+    console.log("Log data:", data);
     displayLog(data);
   } catch (err) {
     console.error(err);
@@ -91,7 +64,6 @@ async function loadLog() {
   }
 }
 
-// Display log on page
 function displayLog(entries) {
   const logDiv = document.getElementById("log");
   logDiv.innerHTML = "";
@@ -113,7 +85,6 @@ function displayLog(entries) {
   }
 }
 
-// Send entry to your local server
 async function sendToServer(entryObj, reset=false) {
   const password = prompt("Enter password:");
   if (password !== "tyvek") {
@@ -122,11 +93,12 @@ async function sendToServer(entryObj, reset=false) {
   }
 
   try {
-    await fetch(`${SERVER_URL}/add`, {
+    const res = await fetch(`${SERVER_URL}/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entry: entryObj, reset, password })
     });
+    console.log("Server response:", await res.json());
     loadLog();
   } catch(err) {
     console.error(err);
@@ -134,16 +106,12 @@ async function sendToServer(entryObj, reset=false) {
   }
 }
 
-// Set the day and log starting count
 function setDaily() {
   date = document.getElementById("date").value || new Date().toDateString();
   material = document.getElementById("material").value;
   lastCount = parseInt(document.getElementById("startCount").value);
 
-  if (!material || isNaN(lastCount)) {
-    alert("Please enter material and starting count");
-    return;
-  }
+  if (!material || isNaN(lastCount)) { alert("Enter material and starting count"); return; }
 
   document.getElementById("summary").innerHTML =
     `<b>${date}</b><br>Material: ${material}<br>Starting Count: ${lastCount}`;
@@ -153,12 +121,8 @@ function setDaily() {
   sendToServer(entryObj, false);
 }
 
-// Add hourly entry
 async function addEntry() {
-  if (lastCount === null) {
-    alert("Set the day first");
-    return;
-  }
+  if (lastCount === null) { alert("Set the day first"); return; }
 
   const time = document.getElementById("time").value;
   const count = parseInt(document.getElementById("count").value);
@@ -174,7 +138,6 @@ async function addEntry() {
   document.getElementById("count").value = "";
 }
 
-// Reset day
 async function resetDay() {
   if (!confirm("Reset for new day?")) return;
 
@@ -191,8 +154,8 @@ async function resetDay() {
   await sendToServer({}, true);
 }
 
-// Auto-refresh every 20 seconds
-setInterval(loadLog, 20000);
+// Auto-refresh
+setInterval(loadLog, 10000);
 loadLog();
 </script>
 
