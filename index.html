@@ -7,7 +7,7 @@
 <style>
 body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; padding: 20px; }
 h1 { margin-bottom: 10px; }
-input, button { width: 100%; padding: 10px; margin: 6px 0; font-size: 16px; }
+input, button, select { width: 100%; padding: 10px; margin: 6px 0; font-size: 16px; }
 button { background: #2563eb; color: white; border: none; border-radius: 6px; }
 button.reset { background: #dc2626; }
 .card { background: #020617; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
@@ -19,6 +19,16 @@ small { color: #94a3b8; }
 <body>
 
 <h1>Hourly Case Tracker</h1>
+
+<div class="card">
+  <h3>Line Selection</h3>
+  <select id="lineSelect" onchange="lineChanged()">
+    <option value="">-- Select Line --</option>
+  </select>
+  <input id="newLine" placeholder="New Line Name / Number">
+  <button onclick="addLine()">Add Line</button>
+  <button onclick="deleteLine()" class="reset">Delete Line</button>
+</div>
 
 <div class="card">
   <h3>Daily Setup</h3>
@@ -44,31 +54,90 @@ small { color: #94a3b8; }
 <button class="reset" onclick="resetDay()">Reset Day</button>
 
 <script>
-let material = "";
-let date = "";
+let lines = [];         // list of line names
+let currentLine = "";   // selected line
 let lastCount = null;
+let date = "";
+let material = "";
 
-// Use your phone's Termux IP
-const SERVER_URL =
-"https://contacting-objective-done-karma.trycloudflare.com";  // <-- REPLACE with your actual LAN IP
+const SERVER_URL = "https://contacting-objective-done-karma.trycloudflare.com"; // update if needed
 
 async function loadLog() {
   try {
     const res = await fetch(`${SERVER_URL}/log.json?` + new Date().getTime());
-    console.log("Load log response:", res);
     const data = await res.json();
-    console.log("Log data:", data);
+    populateLines(data);
     displayLog(data);
-  } catch (err) {
+  } catch(err) {
     console.error(err);
     document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
   }
 }
 
-function displayLog(entries) {
+function populateLines(data) {
+  const uniqueLines = Array.from(new Set(data.map(e => e.line))).filter(l => l);
+  lines = uniqueLines;
+
+  const select = document.getElementById("lineSelect");
+  const old = select.value;
+
+  select.innerHTML = '<option value="">-- Select Line --</option>';
+  lines.forEach(l => {
+    const option = document.createElement("option");
+    option.value = l;
+    option.text = l;
+    select.appendChild(option);
+  });
+
+  if (lines.includes(old)) {
+    select.value = old;
+    currentLine = old;
+  }
+}
+
+function lineChanged() {
+  const select = document.getElementById("lineSelect");
+  currentLine = select.value;
+  lastCount = null;
+  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  displayLog();
+}
+
+function addLine() {
+  const lineName = document.getElementById("newLine").value.trim();
+  if (!lineName) return alert("Enter a line name");
+  if (!lines.includes(lineName)) lines.push(lineName);
+  currentLine = lineName;
+  const select = document.getElementById("lineSelect");
+  const option = document.createElement("option");
+  option.value = lineName;
+  option.text = lineName;
+  select.appendChild(option);
+  select.value = lineName;
+  document.getElementById("newLine").value = "";
+  lastCount = null;
+  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+}
+
+function deleteLine() {
+  if (!currentLine) return alert("Select a line to delete");
+  if (!confirm(`Delete line "${currentLine}"? This cannot be undone`)) return;
+  sendToServer({}, true, currentLine, "delete");
+  currentLine = "";
+  lastCount = null;
+  document.getElementById("lineSelect").value = "";
+  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("log").innerHTML = "";
+}
+
+function displayLog(data=[]) {
   const logDiv = document.getElementById("log");
   logDiv.innerHTML = "";
-  entries.forEach(entry => {
+
+  if (!currentLine) return;
+
+  const lineEntries = data.filter(e => e.line === currentLine);
+  lineEntries.forEach(entry => {
     const diff = entry.diff || 0;
     const div = document.createElement("div");
     div.className = "log-entry";
@@ -76,30 +145,27 @@ function displayLog(entries) {
     logDiv.appendChild(div);
   });
 
-  if (entries.length) {
-    const last = entries[entries.length-1];
-    document.getElementById("summary").innerHTML =
-      `<b>${last.date}</b><br>Material: ${last.material}<br>Last Count: ${last.count}`;
+  if (lineEntries.length) {
+    const last = lineEntries[lineEntries.length-1];
+    document.getElementById("summary").innerHTML = `<b>${last.date}</b><br>Material: ${last.material}<br>Last Count: ${last.count}`;
     lastCount = last.count;
     material = last.material;
     date = last.date;
   }
 }
 
-async function sendToServer(entryObj, reset=false) {
+async function sendToServer(entryObj, reset=false, line="", action="add") {
   const password = prompt("Enter password:");
-  if (password !== "tyvek") {
-    alert("Wrong password! Entry not logged.");
-    return;
-  }
+  if (password !== "tyvek") return alert("Wrong password!");
 
   try {
     const res = await fetch(`${SERVER_URL}/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry: entryObj, reset, password })
+      body: JSON.stringify({ entry: entryObj, reset, line, action, password })
     });
-    console.log("Server response:", await res.json());
+    const result = await res.json();
+    console.log("Server response:", result);
     loadLog();
   } catch(err) {
     console.error(err);
@@ -108,22 +174,23 @@ async function sendToServer(entryObj, reset=false) {
 }
 
 function setDaily() {
+  if (!currentLine) return alert("Select or create a line first");
+
   date = document.getElementById("date").value || new Date().toDateString();
   material = document.getElementById("material").value;
   lastCount = parseInt(document.getElementById("startCount").value);
+  if (!material || isNaN(lastCount)) return alert("Enter material and starting count");
 
-  if (!material || isNaN(lastCount)) { alert("Enter material and starting count"); return; }
-
-  document.getElementById("summary").innerHTML =
-    `<b>${date}</b><br>Material: ${material}<br>Starting Count: ${lastCount}`;
+  document.getElementById("summary").innerHTML = `<b>${date}</b><br>Material: ${material}<br>Starting Count: ${lastCount}`;
   document.getElementById("log").innerHTML = "";
 
-  const entryObj = { date, time: "Start", material, count: lastCount, diff: 0 };
-  sendToServer(entryObj, false);
+  const entryObj = { date, time: "Start", material, count: lastCount, diff: 0, line: currentLine };
+  sendToServer(entryObj);
 }
 
 async function addEntry() {
-  if (lastCount === null) { alert("Set the day first"); return; }
+  if (!currentLine) return alert("Select or create a line first");
+  if (lastCount === null) return alert("Set the day first");
 
   const time = document.getElementById("time").value;
   const count = parseInt(document.getElementById("count").value);
@@ -131,20 +198,21 @@ async function addEntry() {
 
   const diff = count - lastCount;
   lastCount = count;
-  const entryObj = { date, time, material, count, diff };
 
-  await sendToServer(entryObj, false);
+  const entryObj = { date, time, material, count, diff, line: currentLine };
+  await sendToServer(entryObj);
 
   document.getElementById("time").value = "";
   document.getElementById("count").value = "";
 }
 
 async function resetDay() {
-  if (!confirm("Reset for new day?")) return;
+  if (!currentLine) return alert("Select a line first");
+  if (!confirm("Reset this line for new day?")) return;
 
-  material = "";
-  date = "";
   lastCount = null;
+  date = "";
+  material = "";
 
   document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
   document.getElementById("log").innerHTML = "";
@@ -152,13 +220,12 @@ async function resetDay() {
   document.getElementById("material").value = "";
   document.getElementById("startCount").value = "";
 
-  await sendToServer({}, true);
+  await sendToServer({}, true, currentLine);
 }
 
-// Auto-refresh
+// Auto-refresh every 10s
 setInterval(loadLog, 10000);
 loadLog();
 </script>
-
 </body>
 </html>
