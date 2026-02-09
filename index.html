@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hourly Case Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 20px;
+}
+h1 { margin-bottom: 10px; }
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  font-size: 16px;
+}
+button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+}
+button.reset {
+  background: #dc2626;
+}
+.card {
+  background: #020617;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+.log {
+  border-top: 1px solid #334155;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.log-entry {
+  margin-bottom: 6px;
+}
+small { color: #94a3b8; }
+</style>
+</head>
+
+<body>
+
+<h1>Hourly Case Tracker</h1>
+
+<div class="card">
+  <h3>Daily Setup</h3>
+  <input id="date" placeholder="Date (e.g. Mon Feb 9 2026)">
+  <input id="material" placeholder="Material Code (56731)">
+  <input id="startCount" type="number" placeholder="Starting Case Count">
+  <button onclick="setDaily()">Set Day</button>
+</div>
+
+<div class="card">
+  <h3>Hourly Entry</h3>
+  <input id="time" placeholder="Time (7am, 7:30, 8)">
+  <input id="count" type="number" placeholder="Current Case Count">
+  <button onclick="addEntry()">Add Entry</button>
+</div>
+
+<div class="card">
+  <h3>Log</h3>
+  <div id="summary"><small>Waiting for setup...</small></div>
+  <div id="log" class="log"></div>
+</div>
+
+<button class="reset" onclick="resetDay()">Reset Day</button>
+
+<script>
+let material = "";
+let date = "";
+let lastCount = null;
+
+function setDaily() {
+  date = document.getElementById("date").value || new Date().toDateString();
+  material = document.getElementById("material").value;
+  lastCount = parseInt(document.getElementById("startCount").value);
+
+  if (!material || isNaN(lastCount)) {
+    alert("Please enter material and starting count");
+    return;
+  }
+
+  document.getElementById("summary").innerHTML =
+    `<b>${date}</b><br>Material: ${material}<br>Starting Count: ${lastCount}`;
+  document.getElementById("log").innerHTML = "";
+}
+
+function addEntry() {
+  if (lastCount === null) {
+    alert("Set the day first");
+    return;
+  }
+
+  const time = document.getElementById("time").value;
+  const count = parseInt(document.getElementById("count").value);
+
+  if (!time || isNaN(count)) return;
+
+  const diff = count - lastCount;
+  lastCount = count;
+
+  const entry = document.createElement("div");
+  entry.className = "log-entry";
+  entry.innerHTML = `${time} | ${material} | ${count} <b>(+${diff})</b>`;
+
+  document.getElementById("log").appendChild(entry);
+
+  document.getElementById("time").value = "";
+  document.getElementById("count").value = "";
+}
+
+function resetDay() {
+  if (!confirm("Reset for new day?")) return;
+
+  material = "";
+  date = "";
+  lastCount = null;
+
+  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("date").value = "";
+  document.getElementById("material").value = "";
+  document.getElementById("startCount").value = "";
+}
+</script>
+
+</body>
+</html>
