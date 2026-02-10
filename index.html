@@ -4,18 +4,65 @@
 <meta charset="UTF-8">
 <title>Hourly Case Tracker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; padding: 20px; }
-h1 { margin-bottom: 10px; }
-input, button, select { width: 100%; padding: 10px; margin: 6px 0; font-size: 16px; }
-button { background: #2563eb; color: white; border: none; border-radius: 6px; }
-button.reset { background: #dc2626; }
-.card { background: #020617; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
-.log { border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px; }
-.log-entry { margin-bottom: 6px; }
-small { color: #94a3b8; }
+/* ✅ FIX: Prevent input overflow on mobile */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 20px;
+}
+
+h1 {
+  margin-bottom: 10px;
+}
+
+input, button, select {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  font-size: 16px;
+}
+
+button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+}
+
+button.reset {
+  background: #dc2626;
+}
+
+.card {
+  background: #020617;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.log {
+  border-top: 1px solid #334155;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.log-entry {
+  margin-bottom: 6px;
+}
+
+small {
+  color: #94a3b8;
+}
 </style>
 </head>
+
 <body>
 
 <h1>Hourly Case Tracker</h1>
@@ -54,13 +101,13 @@ small { color: #94a3b8; }
 <button class="reset" onclick="resetDay()">Reset Day</button>
 
 <script>
-let lines = [];         
-let currentLine = "";   
+let lines = [];
+let currentLine = "";
 let lastCount = null;
 let date = "";
 let material = "";
 
-const SERVER_URL = "https://cases.hytalesanarchy.com"; // update if needed
+const SERVER_URL = "https://cases.hytalesanarchy.com";
 
 // Load log and update UI
 async function loadLog() {
@@ -69,15 +116,16 @@ async function loadLog() {
     const data = await res.json();
     populateLines(data);
     displayLog(data);
-  } catch(err) {
+  } catch (err) {
     console.error(err);
-    document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
+    document.getElementById("log").innerHTML =
+      "<small>Server not reachable.</small>";
   }
 }
 
 // Populate line dropdown
 function populateLines(data) {
-  const uniqueLines = Array.from(new Set(data.map(e => e.line))).filter(l => l);
+  const uniqueLines = Array.from(new Set(data.map(e => e.line))).filter(Boolean);
   lines = uniqueLines;
 
   const select = document.getElementById("lineSelect");
@@ -99,140 +147,163 @@ function populateLines(data) {
 
 // When line selection changes
 function lineChanged() {
-  const select = document.getElementById("lineSelect");
-  currentLine = select.value;
+  currentLine = document.getElementById("lineSelect").value;
   lastCount = null;
-  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for setup...</small>";
   displayLog();
 }
 
-// Add a new line and persist
+// Add a new line
 function addLine() {
   const lineName = document.getElementById("newLine").value.trim();
   if (!lineName) return alert("Enter a line name");
+
   if (!lines.includes(lineName)) lines.push(lineName);
   currentLine = lineName;
+
   const select = document.getElementById("lineSelect");
   const option = document.createElement("option");
   option.value = lineName;
   option.text = lineName;
   select.appendChild(option);
   select.value = lineName;
+
   document.getElementById("newLine").value = "";
   lastCount = null;
-  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for setup...</small>";
 
-  // Persist initial empty entry
-  const initEntry = { date: new Date().toDateString(), time: "Init", material: "-", count: 0, diff: 0, line: currentLine };
+  const initEntry = {
+    date: new Date().toDateString(),
+    time: "Init",
+    material: "-",
+    count: 0,
+    diff: 0,
+    line: currentLine
+  };
+
   sendToServer(initEntry);
 }
 
 // Delete a line
 function deleteLine() {
   if (!currentLine) return alert("Select a line to delete");
-  if (!confirm(`Delete line "${currentLine}"? This cannot be undone`)) return;
+  if (!confirm(`Delete line "${currentLine}"?`)) return;
+
   sendToServer({}, true, currentLine, "delete");
   currentLine = "";
   lastCount = null;
+
   document.getElementById("lineSelect").value = "";
-  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for setup...</small>";
   document.getElementById("log").innerHTML = "";
 }
 
-// Display log entries for current line
-function displayLog(data=[]) {
+// Display log
+function displayLog(data = []) {
   const logDiv = document.getElementById("log");
   logDiv.innerHTML = "";
 
   if (!currentLine) return;
 
   const lineEntries = data.filter(e => e.line === currentLine);
+
   lineEntries.forEach(entry => {
-    const diff = entry.diff || 0;
     const div = document.createElement("div");
     div.className = "log-entry";
-    div.innerHTML = `${entry.time} | ${entry.material} | ${entry.count} <b>(+${diff})</b>`;
+    div.innerHTML = `${entry.time} | ${entry.material} | ${entry.count} <b>(+${entry.diff || 0})</b>`;
     logDiv.appendChild(div);
   });
 
   if (lineEntries.length) {
-    const last = lineEntries[lineEntries.length-1];
-    document.getElementById("summary").innerHTML = `<b>${last.date}</b><br>Material: ${last.material}<br>Last Count: ${last.count}`;
+    const last = lineEntries.at(-1);
+    document.getElementById("summary").innerHTML =
+      `<b>${last.date}</b><br>Material: ${last.material}<br>Last Count: ${last.count}`;
     lastCount = last.count;
     material = last.material;
     date = last.date;
   }
 }
 
-// Send data to server
-async function sendToServer(entryObj, reset=false, line="", action="add") {
+// Send to server
+async function sendToServer(entryObj, reset = false, line = "", action = "add") {
   const password = prompt("Enter password:");
   if (password !== "tyvek") return alert("Wrong password!");
 
   try {
-    const res = await fetch(`${SERVER_URL}/add`, {
+    await fetch(`${SERVER_URL}/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry: entryObj, reset, line: line || currentLine, action, password })
+      body: JSON.stringify({
+        entry: entryObj,
+        reset,
+        line: line || currentLine,
+        action,
+        password
+      })
     });
-    const result = await res.json();
-    console.log("Server response:", result);
     loadLog();
-  } catch(err) {
-    console.error(err);
+  } catch {
     alert("Failed to send to server.");
   }
 }
 
-// Set daily starting entry
+// Set daily
 function setDaily() {
-  if (!currentLine) return alert("Select or create a line first");
+  if (!currentLine) return alert("Select a line first");
 
   date = document.getElementById("date").value || new Date().toDateString();
   material = document.getElementById("material").value;
   lastCount = parseInt(document.getElementById("startCount").value);
-  if (!material || isNaN(lastCount)) return alert("Enter material and starting count");
 
-  document.getElementById("summary").innerHTML = `<b>${date}</b><br>Material: ${material}<br>Starting Count: ${lastCount}`;
-  document.getElementById("log").innerHTML = "";
+  if (!material || isNaN(lastCount))
+    return alert("Enter material and starting count");
 
-  const entryObj = { date, time: "Start", material, count: lastCount, diff: 0, line: currentLine };
+  const entryObj = {
+    date,
+    time: "Start",
+    material,
+    count: lastCount,
+    diff: 0,
+    line: currentLine
+  };
+
   sendToServer(entryObj);
 }
 
-// Add an hourly entry
+// Add entry
 async function addEntry() {
-  if (!currentLine) return alert("Select or create a line first");
-  if (lastCount === null) return alert("Set the day first");
+  if (!currentLine || lastCount === null)
+    return alert("Set the day first");
 
   const time = document.getElementById("time").value;
   const count = parseInt(document.getElementById("count").value);
+
   if (!time || isNaN(count)) return;
 
   const diff = count - lastCount;
   lastCount = count;
 
-  const entryObj = { date, time, material, count, diff, line: currentLine };
-  await sendToServer(entryObj);
+  sendToServer({ date, time, material, count, diff, line: currentLine });
 
   document.getElementById("time").value = "";
   document.getElementById("count").value = "";
 }
 
-// Reset current line
+// Reset
 async function resetDay() {
   if (!currentLine) return alert("Select a line first");
-  if (!confirm("Reset this line for new day?")) return;
+  if (!confirm("Reset this line?")) return;
 
   lastCount = null;
   date = "";
   material = "";
 
-  document.getElementById("summary").innerHTML = "<small>Waiting for setup...</small>";
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for setup...</small>";
   document.getElementById("log").innerHTML = "";
-  document.getElementById("date").value = "";
-  document.getElementById("material").value = "";
-  document.getElementById("startCount").value = "";
 
   await sendToServer({}, true, currentLine);
 }
@@ -241,5 +312,6 @@ async function resetDay() {
 setInterval(loadLog, 10000);
 loadLog();
 </script>
+
 </body>
 </html>
