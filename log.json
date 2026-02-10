@@ -1,1 +1,66 @@
-[]
+[
+  {
+    "date": "Mon Feb 09 2026",
+    "time": "Init",
+    "material": "-",
+    "count": 0,
+    "diff": 0,
+    "line": "23"
+  },
+  {
+    "date": "Feb 9th 2026",
+    "time": "Start",
+    "material": "56731",
+    "count": 0,
+    "diff": 0,
+    "line": "23"
+  },
+  {
+    "date": "Feb 9th 2026",
+    "time": "8am ",
+    "material": "56731",
+    "count": 525,
+    "diff": 525,
+    "line": "23"
+  },
+  {
+    "date": "Feb 9th 2026",
+    "time": "9am ",
+    "material": "56731",
+    "count": 1000,
+    "diff": 475,
+    "line": "23"
+  },
+  {
+    "date": "Mon Feb 09 2026",
+    "time": "Init",
+    "material": "-",
+    "count": 0,
+    "diff": 0,
+    "line": "35"
+  },
+  {
+    "date": "Feb 9th 2026 (6:46pm)",
+    "time": "Start",
+    "material": "12345",
+    "count": 0,
+    "diff": 0,
+    "line": "35"
+  },
+  {
+    "date": "Feb 9th 2026 (6:46pm)",
+    "time": "8pm",
+    "material": "12345",
+    "count": 500,
+    "diff": 500,
+    "line": "35"
+  },
+  {
+    "date": "Feb 9th 2026 (6:46pm)",
+    "time": "9pm",
+    "material": "12345",
+    "count": 988,
+    "diff": 488,
+    "line": "35"
+  }
+]
