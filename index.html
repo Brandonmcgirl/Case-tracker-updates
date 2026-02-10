@@ -15,8 +15,6 @@ body {
   padding: 20px;
 }
 
-h1 { margin-bottom: 10px; }
-
 input, button, select {
   width: 100%;
   padding: 10px;
@@ -68,14 +66,14 @@ small { color: #94a3b8; }
 
 <div class="card">
   <h3>Run Setup</h3>
-  <input id="material" placeholder="Material Code (56731)">
+  <input id="material" placeholder="Material Code">
   <input id="startCount" type="number" placeholder="Starting Case Count">
   <button onclick="startRun()">Start Run</button>
 </div>
 
 <div class="card">
   <h3>Hourly Entry</h3>
-  <input id="time" placeholder="Time (7am, 7:30, 8)">
+  <input id="time" placeholder="Time (7am, 7:30)">
   <input id="count" type="number" placeholder="Current Case Count">
   <button onclick="addEntry()">Add Entry</button>
 </div>
@@ -95,6 +93,7 @@ small { color: #94a3b8; }
 <button class="reset" onclick="endRun()">End Of Run</button>
 
 <script>
+/* ===== STATE ===== */
 let lines = [];
 let currentLine = "";
 let lastCount = null;
@@ -104,144 +103,23 @@ let lastRun = null;
 
 const SERVER_URL = "https://cases.hytalesanarchy.com";
 
-/* ===== Live Clock ===== */
-function updateClock() {
-  const now = new Date();
-  const formatted =
-    now.toDateString() +
-    " (" +
-    now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) +
-    ")";
-  document.getElementById("liveTime").innerHTML = `<small>${formatted}</small>`;
-}
-setInterval(updateClock, 60000);
-updateClock();
-
-/* ===== Load Log ===== */
-async function loadLog() {
-  try {
-    const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
-    const data = await res.json();
-    populateLines(data);
-    displayLog(data);
-  } catch {
-    document.getElementById("log").innerHTML =
-      "<small>Server not reachable.</small>";
-  }
-}
-
-/* ===== Lines ===== */
-function populateLines(data) {
-  lines = [...new Set(data.map(e => e.line))].filter(Boolean);
-  const select = document.getElementById("lineSelect");
-  select.innerHTML = '<option value="">-- Select Line --</option>';
-  lines.forEach(l => {
-    const o = document.createElement("option");
-    o.value = l;
-    o.text = l;
-    select.appendChild(o);
-  });
-}
-
-function lineChanged() {
-  currentLine = lineSelect.value;
-  lastCount = null;
-  material = "";
-  document.getElementById("summary").innerHTML =
-    "<small>Waiting for run...</small>";
-  document.getElementById("log").innerHTML = "";
-}
-
-/* ===== Run Control ===== */
-function startRun() {
-  if (!currentLine) return alert("Select a line first");
-
-  material = materialInput.value;
-  lastCount = parseInt(startCount.value);
-  if (!material || isNaN(lastCount))
-    return alert("Enter material and starting count");
-
-  runStartTime = new Date();
-
-  document.getElementById("summary").innerHTML =
-    `<b>Material:</b> ${material}<br><b>Last Count:</b> ${lastCount}`;
-}
-
-function endRun() {
-  if (!runStartTime) return alert("No active run");
-
-  lastRun = {
-    material,
-    count: lastCount,
-    start: runStartTime,
-    end: new Date()
-  };
-
-  document.getElementById("lastRun").innerHTML = `
-    <b>Material:</b> ${lastRun.material}<br>
-    <b>Last Count:</b> ${lastRun.count}<br>
-    <b>Start:</b> ${lastRun.start.toDateString()} (${lastRun.start.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})<br>
-    <b>End:</b> ${lastRun.end.toDateString()} (${lastRun.end.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})
-  `;
-
-  material = "";
-  lastCount = null;
-  runStartTime = null;
-
-  document.getElementById("summary").innerHTML =
-    "<small>Waiting for run...</small>";
-  document.getElementById("log").innerHTML = "";
-}
-
-/* ===== Entries ===== */
-function addEntry() {
-  if (!currentLine || lastCount === null)
-    return alert("Start a run first");
-
-  const time = timeInput.value;
-  const count = parseInt(countInput.value);
-  if (!time || isNaN(count)) return;
-
-  const diff = count - lastCount;
-  lastCount = count;
-
-  sendToServer({
-    date: new Date().toDateString(),
-    time,
-    material,
-    count,
-<script>
-/* ===== State ===== */
-let lines = [];
-let currentLine = "";
-let lastCount = null;
-let material = "";
-let runStartTime = null;
-let lastRun = null;
-
-const SERVER_URL = "https://cases.hytalesanarchy.com";
-
-/* ===== DOM Refs (FIX) ===== */
-const lineSelect   = document.getElementById("lineSelect");
+/* ===== DOM ===== */
+const lineSelect = document.getElementById("lineSelect");
 const materialInput = document.getElementById("material");
-const startCount    = document.getElementById("startCount");
-const timeInput     = document.getElementById("time");
-const countInput    = document.getElementById("count");
+const startCountInput = document.getElementById("startCount");
+const timeInput = document.getElementById("time");
+const countInput = document.getElementById("count");
 
-/* ===== Live Clock ===== */
+/* ===== LIVE CLOCK ===== */
 function updateClock() {
   const now = new Date();
-  const formatted =
-    now.toDateString() +
-    " (" +
-    now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) +
-    ")";
-  document.getElementById("liveTime").innerHTML = `<small>${formatted}</small>`;
+  document.getElementById("liveTime").innerHTML =
+    `<small>${now.toDateString()} (${now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})})</small>`;
 }
 setInterval(updateClock, 60000);
 updateClock();
 
-/* ===== Load Log ===== */
+/* ===== LOAD LOG ===== */
 async function loadLog() {
   try {
     const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
@@ -249,16 +127,13 @@ async function loadLog() {
     populateLines(data);
     displayLog(data);
   } catch (e) {
-    console.error(e);
-    document.getElementById("log").innerHTML =
-      "<small>Server not reachable.</small>";
+    document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
   }
 }
 
-/* ===== Lines ===== */
+/* ===== LINES ===== */
 function populateLines(data) {
   lines = [...new Set(data.map(e => e.line))].filter(Boolean);
-
   const old = lineSelect.value;
   lineSelect.innerHTML = '<option value="">-- Select Line --</option>';
 
@@ -280,62 +155,44 @@ function lineChanged() {
   lastCount = null;
   material = "";
   runStartTime = null;
-
-  document.getElementById("summary").innerHTML =
-    "<small>Waiting for run...</small>";
+  document.getElementById("summary").innerHTML = "<small>Waiting for run...</small>";
   document.getElementById("log").innerHTML = "";
 }
 
-/* ===== ADD LINE (RESTORED + FIXED) ===== */
+/* ===== ADD LINE ===== */
 function addLine() {
-  const lineName = document.getElementById("newLine").value.trim();
-  if (!lineName) return alert("Enter a line name");
+  const name = document.getElementById("newLine").value.trim();
+  if (!name) return alert("Enter a line name");
 
-  currentLine = lineName;
+  currentLine = name;
   document.getElementById("newLine").value = "";
 
-  const initEntry = {
+  sendToServer({
     date: new Date().toDateString(),
     time: "Init",
     material: "-",
     count: 0,
     diff: 0,
     line: currentLine
-  };
-
-  sendToServer(initEntry);
+  });
 }
 
 /* ===== DELETE LINE ===== */
 function deleteLine() {
   if (!currentLine) return alert("Select a line first");
   if (!confirm(`Delete line "${currentLine}"?`)) return;
-
   sendToServer({}, true, currentLine, "delete");
-
   currentLine = "";
-  lastCount = null;
-  material = "";
-  runStartTime = null;
-
-  lineSelect.value = "";
-  document.getElementById("summary").innerHTML =
-    "<small>Waiting for run...</small>";
   document.getElementById("log").innerHTML = "";
 }
 
-/* ===== Run Control ===== */
+/* ===== RUN ===== */
 function startRun() {
   if (!currentLine) return alert("Select a line first");
-
   material = materialInput.value;
-  lastCount = parseInt(startCount.value);
-
-  if (!material || isNaN(lastCount))
-    return alert("Enter material and starting count");
-
+  lastCount = parseInt(startCountInput.value);
+  if (!material || isNaN(lastCount)) return alert("Invalid setup");
   runStartTime = new Date();
-
   document.getElementById("summary").innerHTML =
     `<b>Material:</b> ${material}<br><b>Last Count:</b> ${lastCount}`;
 }
@@ -353,23 +210,20 @@ function endRun() {
   document.getElementById("lastRun").innerHTML = `
     <b>Material:</b> ${lastRun.material}<br>
     <b>Last Count:</b> ${lastRun.count}<br>
-    <b>Start:</b> ${lastRun.start.toDateString()} (${lastRun.start.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})<br>
-    <b>End:</b> ${lastRun.end.toDateString()} (${lastRun.end.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})
+    <b>Start:</b> ${lastRun.start.toLocaleString()}<br>
+    <b>End:</b> ${lastRun.end.toLocaleString()}
   `;
 
   material = "";
   lastCount = null;
   runStartTime = null;
-
-  document.getElementById("summary").innerHTML =
-    "<small>Waiting for run...</small>";
+  document.getElementById("summary").innerHTML = "<small>Waiting for run...</small>";
   document.getElementById("log").innerHTML = "";
 }
 
-/* ===== Entries ===== */
+/* ===== ENTRY ===== */
 function addEntry() {
-  if (!currentLine || lastCount === null)
-    return alert("Start a run first");
+  if (!currentLine || lastCount === null) return alert("Start a run first");
 
   const time = timeInput.value;
   const count = parseInt(countInput.value);
@@ -391,27 +245,24 @@ function addEntry() {
   countInput.value = "";
 }
 
-/* ===== Display Log ===== */
+/* ===== DISPLAY ===== */
 function displayLog(data = []) {
   const logDiv = document.getElementById("log");
   logDiv.innerHTML = "";
-
   if (!currentLine) return;
 
-  const entries = data.filter(e => e.line === currentLine);
-
-  entries.forEach(e => {
-    const div = document.createElement("div");
-    div.className = "log-entry";
-    div.innerHTML = `${e.time} | ${e.material} | ${e.count} <b>(+${e.diff || 0})</b>`;
-    logDiv.appendChild(div);
+  data.filter(e => e.line === currentLine).forEach(e => {
+    const d = document.createElement("div");
+    d.className = "log-entry";
+    d.innerHTML = `${e.time} | ${e.material} | ${e.count} <b>(+${e.diff || 0})</b>`;
+    logDiv.appendChild(d);
   });
 }
 
-/* ===== Server (UNCHANGED CONTRACT) ===== */
+/* ===== SERVER ===== */
 async function sendToServer(entry, reset = false, line = "", action = "add") {
   const password = prompt("Enter password:");
-  if (password !== "tyvek") return alert("Wrong password!");
+  if (password !== "tyvek") return alert("Wrong password");
 
   await fetch(`${SERVER_URL}/add`, {
     method: "POST",
@@ -428,9 +279,10 @@ async function sendToServer(entry, reset = false, line = "", action = "add") {
   loadLog();
 }
 
-/* ===== Init ===== */
+/* ===== INIT ===== */
 loadLog();
 setInterval(loadLog, 10000);
-    </script>
+</script>
+
 </body>
 </html>
