@@ -189,16 +189,33 @@ function deleteLine() {
 /* ===== RUN ===== */
 function startRun() {
   if (!currentLine) return alert("Select a line first");
+  const password = prompt("Enter password:");
+  if (password !== "tyvek") return alert("Wrong password");
+
   material = materialInput.value;
   lastCount = parseInt(startCountInput.value);
   if (!material || isNaN(lastCount)) return alert("Invalid setup");
+
   runStartTime = new Date();
+
+  // log Start entry to server
+  sendToServer({
+    date: new Date().toDateString(),
+    time: "Start",
+    material,
+    count: lastCount,
+    diff: 0,
+    line: currentLine
+  });
+
   document.getElementById("summary").innerHTML =
     `<b>Material:</b> ${material}<br><b>Last Count:</b> ${lastCount}`;
 }
 
 function endRun() {
   if (!runStartTime) return alert("No active run");
+  const password = prompt("Enter password:");
+  if (password !== "tyvek") return alert("Wrong password");
 
   lastRun = {
     material,
@@ -213,6 +230,9 @@ function endRun() {
     <b>Start:</b> ${lastRun.start.toLocaleString()}<br>
     <b>End:</b> ${lastRun.end.toLocaleString()}
   `;
+
+  // reset backend for this line, preserving Init
+  sendToServer({}, true, currentLine);
 
   material = "";
   lastCount = null;
