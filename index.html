@@ -210,6 +210,179 @@ function addEntry() {
     time,
     material,
     count,
+<script>
+/* ===== State ===== */
+let lines = [];
+let currentLine = "";
+let lastCount = null;
+let material = "";
+let runStartTime = null;
+let lastRun = null;
+
+const SERVER_URL = "https://cases.hytalesanarchy.com";
+
+/* ===== DOM Refs (FIX) ===== */
+const lineSelect   = document.getElementById("lineSelect");
+const materialInput = document.getElementById("material");
+const startCount    = document.getElementById("startCount");
+const timeInput     = document.getElementById("time");
+const countInput    = document.getElementById("count");
+
+/* ===== Live Clock ===== */
+function updateClock() {
+  const now = new Date();
+  const formatted =
+    now.toDateString() +
+    " (" +
+    now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) +
+    ")";
+  document.getElementById("liveTime").innerHTML = `<small>${formatted}</small>`;
+}
+setInterval(updateClock, 60000);
+updateClock();
+
+/* ===== Load Log ===== */
+async function loadLog() {
+  try {
+    const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
+    const data = await res.json();
+    populateLines(data);
+    displayLog(data);
+  } catch (e) {
+    console.error(e);
+    document.getElementById("log").innerHTML =
+      "<small>Server not reachable.</small>";
+  }
+}
+
+/* ===== Lines ===== */
+function populateLines(data) {
+  lines = [...new Set(data.map(e => e.line))].filter(Boolean);
+
+  const old = lineSelect.value;
+  lineSelect.innerHTML = '<option value="">-- Select Line --</option>';
+
+  lines.forEach(l => {
+    const o = document.createElement("option");
+    o.value = l;
+    o.text = l;
+    lineSelect.appendChild(o);
+  });
+
+  if (lines.includes(old)) {
+    lineSelect.value = old;
+    currentLine = old;
+  }
+}
+
+function lineChanged() {
+  currentLine = lineSelect.value;
+  lastCount = null;
+  material = "";
+  runStartTime = null;
+
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for run...</small>";
+  document.getElementById("log").innerHTML = "";
+}
+
+/* ===== ADD LINE (RESTORED + FIXED) ===== */
+function addLine() {
+  const lineName = document.getElementById("newLine").value.trim();
+  if (!lineName) return alert("Enter a line name");
+
+  currentLine = lineName;
+  document.getElementById("newLine").value = "";
+
+  const initEntry = {
+    date: new Date().toDateString(),
+    time: "Init",
+    material: "-",
+    count: 0,
+    diff: 0,
+    line: currentLine
+  };
+
+  sendToServer(initEntry);
+}
+
+/* ===== DELETE LINE ===== */
+function deleteLine() {
+  if (!currentLine) return alert("Select a line first");
+  if (!confirm(`Delete line "${currentLine}"?`)) return;
+
+  sendToServer({}, true, currentLine, "delete");
+
+  currentLine = "";
+  lastCount = null;
+  material = "";
+  runStartTime = null;
+
+  lineSelect.value = "";
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for run...</small>";
+  document.getElementById("log").innerHTML = "";
+}
+
+/* ===== Run Control ===== */
+function startRun() {
+  if (!currentLine) return alert("Select a line first");
+
+  material = materialInput.value;
+  lastCount = parseInt(startCount.value);
+
+  if (!material || isNaN(lastCount))
+    return alert("Enter material and starting count");
+
+  runStartTime = new Date();
+
+  document.getElementById("summary").innerHTML =
+    `<b>Material:</b> ${material}<br><b>Last Count:</b> ${lastCount}`;
+}
+
+function endRun() {
+  if (!runStartTime) return alert("No active run");
+
+  lastRun = {
+    material,
+    count: lastCount,
+    start: runStartTime,
+    end: new Date()
+  };
+
+  document.getElementById("lastRun").innerHTML = `
+    <b>Material:</b> ${lastRun.material}<br>
+    <b>Last Count:</b> ${lastRun.count}<br>
+    <b>Start:</b> ${lastRun.start.toDateString()} (${lastRun.start.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})<br>
+    <b>End:</b> ${lastRun.end.toDateString()} (${lastRun.end.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})})
+  `;
+
+  material = "";
+  lastCount = null;
+  runStartTime = null;
+
+  document.getElementById("summary").innerHTML =
+    "<small>Waiting for run...</small>";
+  document.getElementById("log").innerHTML = "";
+}
+
+/* ===== Entries ===== */
+function addEntry() {
+  if (!currentLine || lastCount === null)
+    return alert("Start a run first");
+
+  const time = timeInput.value;
+  const count = parseInt(countInput.value);
+  if (!time || isNaN(count)) return;
+
+  const diff = count - lastCount;
+  lastCount = count;
+
+  sendToServer({
+    date: new Date().toDateString(),
+    time,
+    material,
+    count,
     diff,
     line: currentLine
   });
@@ -218,17 +391,36 @@ function addEntry() {
   countInput.value = "";
 }
 
-/* ===== Server ===== */
-async function sendToServer(entry) {
+/* ===== Display Log ===== */
+function displayLog(data = []) {
+  const logDiv = document.getElementById("log");
+  logDiv.innerHTML = "";
+
+  if (!currentLine) return;
+
+  const entries = data.filter(e => e.line === currentLine);
+
+  entries.forEach(e => {
+    const div = document.createElement("div");
+    div.className = "log-entry";
+    div.innerHTML = `${e.time} | ${e.material} | ${e.count} <b>(+${e.diff || 0})</b>`;
+    logDiv.appendChild(div);
+  });
+}
+
+/* ===== Server (UNCHANGED CONTRACT) ===== */
+async function sendToServer(entry, reset = false, line = "", action = "add") {
   const password = prompt("Enter password:");
-  if (password !== "tyvek") return;
+  if (password !== "tyvek") return alert("Wrong password!");
 
   await fetch(`${SERVER_URL}/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       entry,
-      line: currentLine,
+      reset,
+      line: line || currentLine,
+      action,
       password
     })
   });
@@ -236,9 +428,9 @@ async function sendToServer(entry) {
   loadLog();
 }
 
+/* ===== Init ===== */
 loadLog();
 setInterval(loadLog, 10000);
-</script>
-
+    </script>
 </body>
 </html>
