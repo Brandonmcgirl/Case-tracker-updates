@@ -176,11 +176,9 @@ function deleteLine() {
   document.getElementById("lastRun").innerHTML = "<small>No previous run</small>";
 }
 
-/* ===== RUN ===== */
+/* ===== START RUN ===== */
 function startRun() {
   if (!currentLine) return alert("Select a line first");
-  const password = prompt("Enter password:");
-  if (password !== "tyvek") return alert("Wrong password");
 
   material = materialInput.value;
   lastCount = parseInt(startCountInput.value);
@@ -205,8 +203,6 @@ function startRun() {
 /* ===== END RUN ===== */
 function endRun() {
   if (!runStartTime) return alert("No active run");
-  const password = prompt("Enter password:");
-  if (password !== "tyvek") return alert("Wrong password");
 
   lastRun[currentLine] = {
     material,
@@ -222,9 +218,7 @@ function endRun() {
     <b>End:</b> ${lastRun[currentLine].end.toLocaleString()}
   `;
 
-  // Reset backend for this line, preserve Init
-  sendToServer({}, true, currentLine);
-
+  // Do NOT delete the line; just clear local run state
   material = "";
   lastCount = null;
   runStartTime = null;
@@ -232,7 +226,7 @@ function endRun() {
   document.getElementById("log").innerHTML = "";
 }
 
-/* ===== ENTRY ===== */
+/* ===== ADD ENTRY ===== */
 function addEntry() {
   if (!currentLine || lastCount === null) return alert("Start a run first");
   const time = timeInput.value;
@@ -277,7 +271,6 @@ function updateLastRunInfo(data = []) {
   }
 
   if (!lastRun[currentLine] && data.length) {
-    // Try to find last run for this line
     const entries = data.filter(e => e.line === currentLine);
     if (entries.length) {
       const lastEntry = entries.at(-1);
