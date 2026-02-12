@@ -261,7 +261,7 @@ async function endRun() {
   logData.push(lastRunObj);
 
   // Send updated log back to server
-  await sendToServer({ logData }, false, currentLine, "overwrite", false); // overwrite doesn't ask for password
+  await sendToServer({ logData }, false, currentLine, "overwrite", true); // 
 
   // Reset frontend state
   lastCount = null;
