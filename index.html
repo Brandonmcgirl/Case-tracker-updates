@@ -472,47 +472,30 @@ async function deleteLine() {
 
 
 /* ===== START RUN ===== */
-
 async function startRun() {
-
   if (!currentLine) return alert("Select a line first");
-
   material = materialInput.value.trim();
-
   lastCount = parseInt(startCountInput.value) || 0;
-
   targetCount = parseInt(targetCountInput.value) || null;
-
   if (!material) return alert("Invalid setup");
 
-  runStartTime = new Date();
-
-
-
   const entry = {
-
     date: new Date().toDateString(),
-
     time: "Start",
-
     material,
-
     count: lastCount,
-
     diff: 0,
-
     line: currentLine,
-
     targetCount: targetCount
-
   };
 
-
-
-  await sendToServer(entry, false, currentLine, "add", true);
-
-  updateSummary();
-
+  const data = await sendToServer(entry, false, currentLine, "add", true);
+  if (!data.error) {
+    // Only set local state if server accepted it
+    runStartTime = new Date();
+    updateSummary();
+  }
+  // If there's an error (wrong password), don't update anything
 }
 
 
@@ -576,6 +559,7 @@ async function endRun() {
     const data = await sendToServer({}, false, currentLine, "endrun", true);
 
     if (!data.error && data.last_run) {
+        // Only update if server accepted it
         const lr = data.last_run;
         // parse start correctly
         const startDate = lr.start ? new Date(lr.start) : new Date();
@@ -599,13 +583,13 @@ async function endRun() {
 
         lastCount = l.count; // update lastCount so summary shows correctly until new run
         targetCount = l.targetCount;
+        
+        // Clear run state
+        runStartTime = null;
+        material = "";
+        updateSummary();
     }
-
-    // Clear run state immediately
-    runStartTime = null;
-    material = "";
-    await loadLog(); // Force refresh to update UI
-    updateSummary();
+    // If there's an error (wrong password), don't update anything
 }
 
 
