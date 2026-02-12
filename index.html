@@ -262,32 +262,63 @@ async function addEntry() {
   }
 }
 
-/* ===== END RUN ===== */
-async function endRun() {
-  if (!runStartTime) return alert("No active run");
+// ===== LOAD LOG =====
+async function loadLog() {
+    try {
+        const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
+        const data = await res.json();
+        populateLines(data);
+        displayLog(data);
+        updateLastRunInfo(data);
 
-  const data = await sendToServer({}, false, currentLine, "endrun", true);
-
-  if (!data.error && data.last_run) {
-    const lr = data.last_run;
-    lastRun[currentLine] = {
-      material: lr.material,
-      count: lr.count,
-      start: new Date(lr.start),
-      end: new Date(lr.end)
-    };
-    const l = lastRun[currentLine];
-    document.getElementById("lastRun").innerHTML = `
-      <b>Material:</b> ${l.material}<br>
-      <b>Last Count:</b> ${l.count}<br>
-      <b>Start:</b> ${l.start.toLocaleString()}<br>
-      <b>End:</b> ${l.end.toLocaleString()}
-    `;
-  }
-
-  lastCount = null; material = ""; runStartTime = null;
-  updateSummary();
+        // Detect active run for current line
+        if (currentLine) {
+            const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
+            if (activeStart) {
+                runStartTime = new Date(activeStart.date + " " + activeStart.time); // <--- use actual Start time
+                lastCount = activeStart.count;
+                material = activeStart.material;
+                updateSummary();
+            }
+        }
+    } catch {
+        document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
+    }
 }
+
+// ===== END RUN =====
+async function endRun() {
+    if (!runStartTime) return alert("No active run");
+
+    const data = await sendToServer({}, false, currentLine, "endrun", true);
+
+    if (!data.error && data.last_run) {
+        const lr = data.last_run;
+        // parse start correctly
+        const startDate = lr.start ? new Date(lr.start) : new Date();
+        const endDate = lr.end ? new Date(lr.end) : new Date();
+
+        lastRun[currentLine] = {
+            material: lr.material,
+            count: lr.count,
+            start: startDate,
+            end: endDate
+        };
+        const l = lastRun[currentLine];
+        document.getElementById("lastRun").innerHTML = `
+            <b>Material:</b> ${l.material}<br>
+            <b>Last Count:</b> ${l.count}<br>
+            <b>Start:</b> ${l.start.toLocaleString()}<br>
+            <b>End:</b> ${l.end.toLocaleString()}
+        `;
+
+        lastCount = l.count; // update lastCount so summary shows correctly until new run
+    }
+
+    runStartTime = null;
+    updateSummary();
+}
+
 
 /* ===== DISPLAY LOG ===== */
 function displayLog(data = []) {
