@@ -8,7 +8,7 @@
 * { box-sizing: border-box; }
 body { font-family: Arial; background: #0f172a; color: #e5e7eb; padding: 20px; }
 input, button, select { width: 100%; padding: 10px; margin: 6px 0; font-size: 16px; }
-button { background: #2563eb; color: white; border: none; border-radius: 6px; }
+button { background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
 button.reset { background: #dc2626; }
 .card { background: #020617; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
 .log { border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px; }
@@ -85,25 +85,34 @@ setInterval(updateClock, 60000);
 updateClock();
 
 /* ===== PASSWORD PROMPT ===== */
-async function getPassword(msg = "Enter password:") {
-  const pw = prompt(msg);
+async function getPassword(promptMsg = "Enter password:") {
+  const pw = prompt(promptMsg);
   if (!pw) throw new Error("Password required");
   return pw;
 }
 
 /* ===== SERVER COMMUNICATION ===== */
 async function sendToServer(entry = {}, reset = false, line = "", action = "add", requirePassword = true) {
+  if (!line) {
+    alert("No line selected!");
+    return { error: "No line selected" };
+  }
+
   let password = "";
   if (requirePassword) {
-    try { password = await getPassword(); }
-    catch (err) { alert(err.message); return { error: err.message }; }
+    try {
+      password = await getPassword();
+    } catch (err) {
+      alert("Password is required for this action.");
+      return { error: "Password required" };
+    }
   }
 
   try {
     const res = await fetch(`${SERVER_URL}/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entry, reset, line: line || currentLine, action, password })
+      body: JSON.stringify({ entry, reset, line, action, password })
     });
 
     if (res.status === 403) {
@@ -112,9 +121,9 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
     }
 
     const data = await res.json();
-    await loadLog();
+    await loadLog(); // refresh log immediately after success
     return data;
-  } catch {
+  } catch (err) {
     alert("Server unreachable");
     return { error: "Server unreachable" };
   }
@@ -130,12 +139,14 @@ async function loadLog() {
     updateLastRunInfo(data);
 
     // Detect active run for current line
-    const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
-    if (activeStart) {
-      runStartTime = new Date();
-      lastCount = activeStart.count;
-      material = activeStart.material;
-      updateSummary();
+    if (currentLine) {
+      const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
+      if (activeStart) {
+        runStartTime = new Date();
+        lastCount = activeStart.count;
+        material = activeStart.material;
+        updateSummary();
+      }
     }
   } catch {
     document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
@@ -149,8 +160,7 @@ function populateLines(data) {
   lineSelect.innerHTML = '<option value="">-- Select Line --</option>';
   lines.forEach(l => {
     const o = document.createElement("option");
-    o.value = l; o.text = l;
-    lineSelect.appendChild(o);
+    o.value = l; o.text = l; lineSelect.appendChild(o);
   });
   if (lines.includes(old)) { lineSelect.value = old; currentLine = old; }
 }
@@ -163,7 +173,7 @@ function lineChanged() {
   updateLastRunInfo();
 }
 
-/* ===== SUMMARY ===== */
+/* ===== SUMMARY UPDATE ===== */
 function updateSummary() {
   const summary = document.getElementById("summary");
   if (currentLine && lastCount !== null) {
@@ -173,29 +183,33 @@ function updateSummary() {
   }
 }
 
-/* ===== ADD LINE ===== */
+/* ===== ADD / DELETE LINE ===== */
 async function addLine() {
   const name = document.getElementById("newLine").value.trim();
   if (!name) return alert("Enter a line name");
   currentLine = name;
   document.getElementById("newLine").value = "";
 
-  await sendToServer({
+  const entry = {
     date: new Date().toDateString(),
     time: "Init",
     material: "-",
     count: 0,
     diff: 0,
     line: currentLine
-  }, false, currentLine, "add", true); // always prompt password
+  };
+
+  await sendToServer(entry, false, currentLine, "add", true);
 }
 
-/* ===== DELETE LINE ===== */
 async function deleteLine() {
   if (!currentLine) return alert("Select a line first");
   if (!confirm(`Delete line "${currentLine}"?`)) return;
-  await sendToServer({}, true, currentLine, "delete", true); // prompt password
-  currentLine = ""; lastCount = null; material = ""; runStartTime = null;
+
+  await sendToServer({}, true, currentLine, "delete", true);
+
+  currentLine = "";
+  lastCount = null; material = ""; runStartTime = null;
   updateSummary();
   document.getElementById("log").innerHTML = "";
   document.getElementById("lastRun").innerHTML = "<small>No previous run</small>";
@@ -209,16 +223,17 @@ async function startRun() {
   if (!material || isNaN(lastCount)) return alert("Invalid setup");
   runStartTime = new Date();
 
-  const data = await sendToServer({
+  const entry = {
     date: new Date().toDateString(),
     time: "Start",
     material,
     count: lastCount,
     diff: 0,
     line: currentLine
-  }, false, currentLine, "add", true);
+  };
 
-  if (!data.error) updateSummary();
+  await sendToServer(entry, false, currentLine, "add", true);
+  updateSummary();
 }
 
 /* ===== ADD ENTRY ===== */
@@ -229,15 +244,16 @@ async function addEntry() {
   if (!time || isNaN(count)) return alert("Invalid entry");
 
   const diff = count - lastCount;
-  const data = await sendToServer({
+  const entry = {
     date: new Date().toDateString(),
     time,
     material,
     count,
     diff,
     line: currentLine
-  }, false, currentLine, "add", true); // always prompt password
+  };
 
+  const data = await sendToServer(entry, false, currentLine, "add", true);
   if (!data.error) {
     lastCount = count;
     updateSummary();
@@ -249,21 +265,23 @@ async function addEntry() {
 /* ===== END RUN ===== */
 async function endRun() {
   if (!runStartTime) return alert("No active run");
-  const data = await sendToServer({}, false, currentLine, "endrun", true); // prompt password
+
+  const data = await sendToServer({}, false, currentLine, "endrun", true);
 
   if (!data.error && data.last_run) {
+    const lr = data.last_run;
     lastRun[currentLine] = {
-      material: data.last_run.material,
-      count: data.last_run.count,
-      start: new Date(data.last_run.start),
-      end: new Date(data.last_run.end)
+      material: lr.material,
+      count: lr.count,
+      start: new Date(lr.start),
+      end: new Date(lr.end)
     };
-    const lr = lastRun[currentLine];
+    const l = lastRun[currentLine];
     document.getElementById("lastRun").innerHTML = `
-      <b>Material:</b> ${lr.material}<br>
-      <b>Last Count:</b> ${lr.count}<br>
-      <b>Start:</b> ${lr.start.toLocaleString()}<br>
-      <b>End:</b> ${lr.end.toLocaleString()}
+      <b>Material:</b> ${l.material}<br>
+      <b>Last Count:</b> ${l.count}<br>
+      <b>Start:</b> ${l.start.toLocaleString()}<br>
+      <b>End:</b> ${l.end.toLocaleString()}
     `;
   }
 
@@ -276,6 +294,7 @@ function displayLog(data = []) {
   const logDiv = document.getElementById("log");
   logDiv.innerHTML = "";
   if (!currentLine) return;
+
   data.filter(e => e.line === currentLine && !e.last_run).forEach(e => {
     const d = document.createElement("div");
     d.className = "log-entry";
@@ -290,6 +309,7 @@ function updateLastRunInfo(data = []) {
     document.getElementById("lastRun").innerHTML = "<small>No previous run</small>";
     return;
   }
+
   const lastRunEntry = data.find(e => e.line === currentLine && e.last_run);
   if (lastRunEntry) {
     const lr = lastRunEntry.last_run;
@@ -300,6 +320,7 @@ function updateLastRunInfo(data = []) {
       end: new Date(lr.end)
     };
   }
+
   if (lastRun[currentLine]) {
     const lr = lastRun[currentLine];
     document.getElementById("lastRun").innerHTML = `
@@ -315,7 +336,7 @@ function updateLastRunInfo(data = []) {
 
 /* ===== INIT ===== */
 loadLog();
-setInterval(loadLog, 5000); // refresh every 5s
+setInterval(loadLog, 5000); // refresh log every 5 seconds
 </script>
 
 </body>
