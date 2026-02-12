@@ -115,8 +115,7 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
     const res = await fetch(`${SERVER_URL}/add`, {
       method: "POST",
       headers: { 
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({ entry, reset, line, action, password })
     });
@@ -133,7 +132,7 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
     }
 
     const data = await res.json();
-    await loadLog(true); // Force refresh after success
+    await loadLog(); // refresh log immediately after success
     return data;
   } catch (err) {
     alert("Server unreachable");
@@ -142,17 +141,9 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
 }
 
 /* ===== LOAD LOG ===== */
-async function loadLog(forceRefresh = false) {
+async function loadLog() {
   try {
-    // Add timestamp to bust cache
-    const timestamp = forceRefresh ? Date.now() : new Date().getTime();
-    const res = await fetch(`${SERVER_URL}/log.json?_=${timestamp}`, {
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
-      }
-    });
+    const res = await fetch(`${SERVER_URL}/log.json`);
     const data = await res.json();
     populateLines(data);
     displayLog(data);
@@ -183,13 +174,11 @@ async function loadLog(forceRefresh = false) {
         updateSummary();
       } else {
         // No active run or run has been ended
-        if (!forceRefresh || (forceRefresh && !activeStart) || lastRunEntry) {
-          runStartTime = null;
-          material = "";
-          lastCount = null;
-          targetCount = null;
-          updateSummary();
-        }
+        runStartTime = null;
+        material = "";
+        lastCount = null;
+        targetCount = null;
+        updateSummary();
       }
     }
   } catch (err) {
@@ -347,10 +336,9 @@ async function endRun() {
         targetCount = l.targetCount;
     }
 
-    // Clear run state immediately
+    // Clear run state
     runStartTime = null;
     material = "";
-    await loadLog(true); // Force refresh to sync with server
     updateSummary();
 }
 
@@ -404,8 +392,7 @@ function updateLastRunInfo(data = []) {
 
 /* ===== INIT ===== */
 loadLog();
-// More frequent polling for better sync across devices
-setInterval(() => loadLog(false), 2000); // Refresh every 2 seconds instead of 5
+setInterval(loadLog, 2000); // Refresh every 2 seconds for better sync
 </script>
 
 </body>
