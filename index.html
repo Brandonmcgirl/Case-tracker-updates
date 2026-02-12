@@ -142,7 +142,9 @@ async function loadLog() {
     if (currentLine) {
       const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
       if (activeStart) {
-        runStartTime = new Date();
+        runStartTime = activeStart.timestamp
+            ? new Date(activeStart.timestamp)
+            : new Date(); // fallback if missing
         lastCount = activeStart.count;
         material = activeStart.material;
         updateSummary();
@@ -260,30 +262,6 @@ async function addEntry() {
     timeInput.value = "";
     countInput.value = "";
   }
-}
-
-// ===== LOAD LOG =====
-async function loadLog() {
-    try {
-        const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
-        const data = await res.json();
-        populateLines(data);
-        displayLog(data);
-        updateLastRunInfo(data);
-
-        // Detect active run for current line
-        if (currentLine) {
-            const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
-            if (activeStart) {
-                runStartTime = new Date(activeStart.date + " " + activeStart.time); // <--- use actual Start time
-                lastCount = activeStart.count;
-                material = activeStart.material;
-                updateSummary();
-            }
-        }
-    } catch {
-        document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
-    }
 }
 
 // ===== END RUN =====
