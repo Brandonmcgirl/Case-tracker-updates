@@ -226,17 +226,55 @@ async function addEntry() {
 /* ===== END RUN ===== */
 async function endRun() {
   if (!currentLine) return alert("Select a line first");
-  const data = await sendToServer({}, false, currentLine, "endrun", true);
-  if (!data.error) {
-    lastCount = null;
-    material = "";
-    runStartTime = null;
 
-    document.getElementById("log").innerHTML = "";
-    document.getElementById("summary").innerHTML = "<small>Waiting for run...</small>";
-    document.getElementById("lastRun").innerHTML = "<small>No previous run</small>";
+  // Fetch current log from server
+  let logData;
+  try {
+    const res = await fetch(`${SERVER_URL}/log.json?nocache=${Date.now()}`, { cache: "no-store" });
+    logData = await res.json();
+  } catch {
+    return alert("Server unreachable");
   }
+
+  // Get all entries for this line excluding Init and any previous last_run
+  const runEntries = logData.filter(e => e.line === currentLine && !e.last_run && e.time !== "Init");
+  if (!runEntries.length) return alert("No entries for this run");
+
+  // Take the last entry to get final count
+  const finalEntry = runEntries[runEntries.length - 1];
+
+  // Build last_run object
+  const lastRunObj = {
+    line: currentLine,
+    last_run: {
+      material: finalEntry.material,
+      count: finalEntry.count,
+      start: runEntries[0].timestamp,
+      end: finalEntry.timestamp
+    }
+  };
+
+  // Remove all non-Init entries for this line
+  logData = logData.filter(e => e.line !== currentLine || e.time === "Init");
+
+  // Add last_run
+  logData.push(lastRunObj);
+
+  // Send updated log back to server
+  await sendToServer({ logData }, false, currentLine, "overwrite", false); // overwrite doesn't ask for password
+
+  // Reset frontend state
+  lastCount = null;
+  material = "";
+  runStartTime = null;
+
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("summary").innerHTML = "<small>Waiting for run...</small>";
+
+  // Reload log to reflect changes
+  await loadLog();
 }
+
 
 /* ===== DISPLAY LOG ===== */
 function displayLog(data = []) {
