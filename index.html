@@ -266,59 +266,37 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
 
 
 
-/* ===== LOAD LOG ===== */
-async function loadLog() {
-  try {
-    const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
-    const data = await res.json();
-    console.log("Loaded data for line", currentLine, data);
-    populateLines(data);
-    displayLog(data);
-    updateLastRunInfo(data);
 
-    // Detect active run for current line
-    if (currentLine) {
-      const activeStart = data.find(e => e.line === currentLine && e.time === "Start");
-      const lastRunEntry = data.find(e => e.line === currentLine && e.last_run);
-      
-      console.log("Active start:", activeStart, "Last run entry:", lastRunEntry);
-      
-      if (activeStart && !lastRunEntry) {
-        console.log("Found active run");
-        // Active run exists and hasn't been ended
-        runStartTime = activeStart.timestamp
-            ? new Date(activeStart.timestamp)
-            : new Date(); // fallback if missing
-        material = activeStart.material;
-        
-        // Find the latest count for this line
-        const lineEntries = data.filter(e => e.line === currentLine && e.time !== "Init" && e.time !== "Start");
-        if (lineEntries.length > 0) {
-          const latestEntry = lineEntries[lineEntries.length - 1];
-          lastCount = latestEntry.count;
-        } else {
-          lastCount = activeStart.count;
-        }
-        
-        targetCount = activeStart.targetCount || null;
-        updateSummary();
-      } else {
-        console.log("No active run or run ended - clearing state");
-        // No active run OR run has been ended - CLEAR ALL STATE
-        runStartTime = null;
-        material = "";
-        lastCount = null;
-        targetCount = null;
-        updateSummary(); // This was missing!
-      }
+/* ===== LOAD LOG ===== */ async function loadLog() { try { const res = await fetch(${SERVER_URL}/log.json?${Date.now()}); const data = await res.json(); populateLines(data); displayLog(data); updateLastRunInfo(data); // Detect active run for current line if (currentLine) { const activeStart = data.find(e => e.line === currentLine && e.time === "Start"); const lastRunEntry = data.find(e => e.line === currentLine && e.last_run);
+
+  if (activeStart && !lastRunEntry) {
+    // Active run exists and hasn't been ended
+    runStartTime = activeStart.timestamp
+        ? new Date(activeStart.timestamp)
+        : new Date(); // fallback if missing
+    material = activeStart.material;
+    
+    // Find the latest count for this line
+    const lineEntries = data.filter(e => e.line === currentLine && e.time !== "Init" && e.time !== "Start");
+    if (lineEntries.length > 0) {
+      const latestEntry = lineEntries[lineEntries.length - 1];
+      lastCount = latestEntry.count;
+    } else {
+      lastCount = activeStart.count;
     }
-  } catch (err) {
-    console.error("Load log error:", err);
-    document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
+    
+    targetCount = activeStart.targetCount || null;
+    updateSummary();
+  } else {
+    // No active run or run has been ended
+    runStartTime = null;
+    material = "";
+    lastCount = null;
+    targetCount = null;
+    updateSummary();
   }
 }
-
-
+} catch { document.getElementById("log").innerHTML = "Server not reachable."; } }
 
 
 /* ===== LINES ===== */
