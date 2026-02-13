@@ -228,6 +228,7 @@ async function toggleDowntime() {
   }
 }
 
+// ✅ KEEP ONLY THIS VERSION OF loadDowntime()
 async function loadDowntime() {
   try {
     const res = await fetch(`${SERVER_URL}/downtime.json?${Date.now()}`);
@@ -248,23 +249,6 @@ async function loadDowntime() {
       startTime: lineDowntime.start_time
     };
     
-    updateDowntimeDisplay();
-  } catch (err) {
-    console.error("Downtime load error:", err);
-  }
-}
-
-
-async function loadDowntime() {
-  try {
-    const res = await fetch(`${SERVER_URL}/downtime.json?${Date.now()}`);
-    const data = await res.json();
-    downtimeData = {
-      status: data.status,
-      totalUptime: data.total_uptime || 0,
-      totalDowntime: data.total_downtime || 0,
-      startTime: data.start_time
-    };
     updateDowntimeDisplay();
   } catch (err) {
     console.error("Downtime load error:", err);
@@ -437,6 +421,9 @@ function lineChanged() {
   updateProgressBar();
   displayLog([]);
   updateLastRunInfo();
+  
+  // Reload downtime when line changes
+  loadDowntime();
 }
 
 /* ===== SUMMARY UPDATE ===== */
