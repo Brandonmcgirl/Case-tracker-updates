@@ -11,6 +11,8 @@ input, button, select { width: 100%; padding: 10px; margin: 6px 0; font-size: 16
 button { background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
 button.reset { background: #dc2626; }
 button.suggestion { background: #8b5cf6; }
+button.downtime { background: #10b981; }
+button.downtime.stop { background: #ef4444; }
 .card { background: #020617; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
 .log { border-top: 1px solid #334155; margin-top: 10px; padding-top: 10px; }
 .log-entry { margin-bottom: 6px; }
@@ -33,6 +35,21 @@ small { color: #94a3b8; }
 .progress-bar.green { background-color: #10b981; }
 .progress-bar.yellow { background-color: #f59e0b; }
 .progress-bar.red { background-color: #ef4444; }
+.status-light {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 10px;
+}
+.status-light.running { background-color: #10b981; }
+.status-light.stopped { background-color: #ef4444; }
+.downtime-display {
+    margin: 10px 0;
+    padding: 10px;
+    background: #1e293b;
+    border-radius: 5px;
+}
 </style>
 </head>
 <body>
@@ -62,6 +79,13 @@ small { color: #94a3b8; }
   <input id="time" placeholder="Time (7am, 7:30)">
   <input id="count" type="number" placeholder="Current Case Count">
   <button onclick="addEntry()">Add Entry</button>
+</div>
+
+<div class="card">
+  <h3>Downtime Tracking</h3>
+  <div id="downtimeStatus"></div>
+  <button id="downtimeButton" class="downtime" onclick="toggleDowntime()">Start Downtime Tracking</button>
+  <div id="downtimeDisplay" class="downtime-display"></div>
 </div>
 
 <div class="card">
@@ -95,6 +119,12 @@ let targetCount = null;
 let material = "";
 let runStartTime = null;
 let lastRun = {}; // per line
+let downtimeData = {
+    status: "stopped",
+    totalUptime: 0,
+    totalDowntime: 0,
+    startTime: null
+};
 const SERVER_URL = "https://cases.hytalesanarchy.com";
 
 /* ===== DOM ===== */
@@ -106,6 +136,7 @@ const timeInput = document.getElementById("time");
 const countInput = document.getElementById("count");
 const suggestionInput = document.getElementById("suggestionInput");
 const suggestionUser = document.getElementById("suggestionUser");
+const downtimeButton = document.getElementById("downtimeButton");
 
 /* ===== LIVE CLOCK ===== */
 function updateClock() {
@@ -161,6 +192,84 @@ async function sendToServer(entry = {}, reset = false, line = "", action = "add"
   }
 }
 
+/* ===== DOWNTIME TRACKING ===== */
+async function toggleDowntime() {
+  try {
+    let password = "";
+    try {
+      password = await getPassword();
+    } catch (err) {
+      alert("Password is required for this action.");
+      return;
+    }
+
+    const endpoint = downtimeData.status === "running" ? "/downtime/stop" : "/downtime/start";
+    const res = await fetch(`${SERVER_URL}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+
+    if (res.status === 403) {
+      alert("Wrong password!");
+      return;
+    }
+
+    await loadDowntime(); // Refresh downtime status
+  } catch (err) {
+    alert("Server unreachable");
+  }
+}
+
+async function loadDowntime() {
+  try {
+    const res = await fetch(`${SERVER_URL}/downtime.json?${Date.now()}`);
+    const data = await res.json();
+    downtimeData = {
+      status: data.status,
+      totalUptime: data.total_uptime || 0,
+      totalDowntime: data.total_downtime || 0,
+      startTime: data.start_time
+    };
+    updateDowntimeDisplay();
+  } catch (err) {
+    console.error("Downtime load error:", err);
+  }
+}
+
+function updateDowntimeDisplay() {
+  const statusDiv = document.getElementById("downtimeStatus");
+  const displayDiv = document.getElementById("downtimeDisplay");
+  
+  // Update button text and class
+  downtimeButton.textContent = downtimeData.status === "running" ? "Stop Downtime Tracking" : "Start Downtime Tracking";
+  downtimeButton.className = downtimeData.status === "running" ? "downtime stop" : "downtime";
+  
+  // Update status display
+  const statusLight = downtimeData.status === "running" ? 
+    '<span class="status-light running"></span>' : 
+    '<span class="status-light stopped"></span>';
+  const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
+  statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
+  
+  // Calculate current session time if running
+  let currentSession = 0;
+  if (downtimeData.status === "running" && downtimeData.startTime) {
+    const startTime = new Date(downtimeData.startTime);
+    currentSession = (new Date() - startTime) / 1000; // seconds
+  }
+  
+  // Total uptime calculation
+  const totalUptimeSeconds = downtimeData.totalUptime + (downtimeData.status === "running" ? currentSession : 0);
+  const uptimeHours = Math.floor(totalUptimeSeconds / 3600);
+  const uptimeMinutes = Math.floor((totalUptimeSeconds % 3600) / 60);
+  
+  // Display uptime/downtime
+  displayDiv.innerHTML = `
+    <strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
+  `;
+}
+
 /* ===== SUGGESTION SUBMISSION ===== */
 async function submitSuggestion() {
   const suggestion = suggestionInput.value.trim();
@@ -193,13 +302,12 @@ async function submitSuggestion() {
   }
 }
 
-
 /* ===== PROGRESS BAR ===== */
 function updateProgressBar() {
   const progressContainer = document.getElementById("progressContainer");
   progressContainer.innerHTML = "";
   
-  if (currentLine && targetCount && lastCount !== null) {
+  if (currentLine && targetCount && lastCount !== null && runStartTime) {
     const percentage = Math.min((lastCount / targetCount) * 100, 100);
     const isOverTarget = lastCount > targetCount;
     
@@ -215,6 +323,17 @@ function updateProgressBar() {
         ${Math.round(percentage)}%
       </div>
       <small>${lastCount} / ${targetCount} ${isOverTarget ? '(Over target!)' : ''}</small>
+    `;
+    progressContainer.appendChild(progressBar);
+  } else if (currentLine && !runStartTime) {
+    // No active run
+    const progressBar = document.createElement("div");
+    progressBar.className = "progress-bar-container";
+    progressBar.innerHTML = `
+      <div class="progress-bar red" style="width: 100%;">
+        Waiting for run...
+      </div>
+      <small>0 / 0</small>
     `;
     progressContainer.appendChild(progressBar);
   }
@@ -250,6 +369,14 @@ async function loadLog() {
         targetCount = activeStart.targetCount || null;
         updateSummary();
         updateProgressBar();
+      } else {
+        // No active run
+        runStartTime = null;
+        material = "";
+        lastCount = null;
+        targetCount = null;
+        updateSummary();
+        updateProgressBar();
       }
     }
   } catch {
@@ -281,7 +408,7 @@ function lineChanged() {
 /* ===== SUMMARY UPDATE ===== */
 function updateSummary() {
   const summary = document.getElementById("summary");
-  if (currentLine && material) {
+  if (currentLine && material && runStartTime) {
     let summaryHTML = `<b>Material:</b> ${material}<br><b>Last Count:</b> ${lastCount !== null ? lastCount : 'N/A'}`;
     if (targetCount !== null) {
       summaryHTML += `<br><b>Target Count:</b> ${targetCount}`;
@@ -452,10 +579,8 @@ function updateLastRunInfo(data = []) {
       end: new Date(lr.end),
       targetCount: lr.targetCount
     };
-  }
-
-  if (lastRun[currentLine]) {
-    const lr = lastRun[currentLine];
+    
+    // Add downtime info to last run display
     document.getElementById("lastRun").innerHTML = `
       <b>Material:</b> ${lr.material}<br>
       <b>Last Count:</b> ${lr.count}<br>
@@ -471,8 +596,11 @@ function updateLastRunInfo(data = []) {
 /* ===== INIT ===== */
 loadLog();
 setInterval(loadLog, 5000); // refresh log every 5 seconds
+
+// Load downtime tracking
+loadDowntime();
+setInterval(loadDowntime, 30000); // refresh downtime every 30 seconds
 </script>
 
 </body>
 </html>
-
