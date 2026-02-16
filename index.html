@@ -284,9 +284,9 @@ function updateDowntimeDisplay() {
     let displayDowntime = downtimeData.totalDowntime;
 
     if (downtimeData.status === "running") {
-        displayUptime += currentSession;
+        displayUptime += currentSession /2;
     } else if (downtimeData.status === "stopped") {
-        displayDowntime += currentSession;
+        displayDowntime += currentSession /2;
     }
 
     // Handle negative or invalid values
