@@ -254,44 +254,45 @@ console.error("Downtime load error:", err);
 }
 
 function updateDowntimeDisplay() {
-const statusDiv = document.getElementById("downtimeStatus");
-const displayDiv = document.getElementById("downtimeDisplay");
-
-downtimeButton.textContent = downtimeData.status === "running" ? "Stop Uptime Tracking" : "Start Uptime Tracking";
-downtimeButton.className = downtimeData.status === "running" ? "downtime stop" : "downtime";
-
-const statusLight = downtimeData.status === "running" ?
-'<span class="status-light running"></span>' :
-'<span class="status-light stopped"></span>';
-const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
-statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
-
-// Calculate current session time
-let currentSession = 0;
-if (downtimeData.sessionStart) {
-const startTime = new Date(downtimeData.sessionStart);
-currentSession = (new Date() - startTime) / 1000; // seconds
-}
-
-// Calculate display values (don't double count)
-let displayUptime = downtimeData.totalUptime;
-let displayDowntime = downtimeData.totalDowntime;
-
-if (downtimeData.status === "running") {
-displayUptime += currentSession;
-} else if (downtimeData.status === "stopped") {
-displayDowntime += currentSession;
-}
-
-const uptimeHours = Math.floor(displayUptime / 3600);
-const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);
-const downtimeHours = Math.floor(displayDowntime / 3600);
-const downtimeMinutes = Math.floor((displayDowntime % 3600) / 60);
-
-displayDiv.innerHTML = `
-<strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
-<strong>Downtime:</strong> ${downtimeHours}h ${downtimeMinutes}m<br>
-`;
+function updateDowntimeDisplay() {  
+const statusDiv = document.getElementById("downtimeStatus");  
+const displayDiv = document.getElementById("downtimeDisplay");  
+  
+downtimeButton.textContent = downtimeData.status === "running" ? "Stop Uptime Tracking" : "Start Uptime Tracking";  
+downtimeButton.className = downtimeData.status === "running" ? "downtime stop" : "downtime";  
+  
+const statusLight = downtimeData.status === "running" ?  
+'<span class="status-light running"></span>' :  
+'<span class="status-light stopped"></span>';  
+const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";  
+statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;  
+  
+// Calculate current session time properly  
+let currentSession = 0;  
+if (downtimeData.sessionStart) {  
+const startTime = new Date(downtimeData.sessionStart + 'Z'); // Force UTC interpretation  
+currentSession = (Date.now() - startTime.getTime()) / 1000; // seconds  
+}  
+  
+// Calculate display values (don't double count)  
+let displayUptime = downtimeData.totalUptime;  
+let displayDowntime = downtimeData.totalDowntime;  
+  
+if (downtimeData.status === "running") {  
+displayUptime += currentSession;  
+} else if (downtimeData.status === "stopped") {  
+displayDowntime += currentSession;  
+}  
+  
+const uptimeHours = Math.floor(displayUptime / 3600);  
+const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);  
+const downtimeHours = Math.floor(displayDowntime / 3600);  
+const downtimeMinutes = Math.floor((displayDowntime % 3600) / 60);  
+  
+displayDiv.innerHTML = `  
+<strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>  
+<strong>Downtime:</strong> ${downtimeHours}h ${downtimeMinutes}m<br>  
+`;  
 }
 
 /* ===== HELPERS ===== */
