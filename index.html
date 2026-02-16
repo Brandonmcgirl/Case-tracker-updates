@@ -125,7 +125,7 @@ totalUptime: 0,
 totalDowntime: 0,
 sessionStart: null
 };
-const SERVER_URL = "https://viking-mil-capital-ladies.trycloudflare.com";                                      
+const SERVER_URL = "https://viking-mil-capital-ladies.trycloudflare.com";
 
 /* ===== DOM ===== */
 const lineSelect = document.getElementById("lineSelect");
@@ -266,19 +266,27 @@ const statusLight = downtimeData.status === "running" ?
 const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
 statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
 
+// Calculate current session time
 let currentSession = 0;
 if (downtimeData.sessionStart) {
 const startTime = new Date(downtimeData.sessionStart);
-currentSession = (new Date() - startTime) / 1000;
+currentSession = (new Date() - startTime) / 1000; // seconds
 }
 
-const totalUptimeSeconds = downtimeData.totalUptime + (downtimeData.status === "running" ? currentSession : 0);
-const totalDowntimeSeconds = downtimeData.totalDowntime + (downtimeData.status === "stopped" ? currentSession : 0);
+// Calculate display values (don't double count)
+let displayUptime = downtimeData.totalUptime;
+let displayDowntime = downtimeData.totalDowntime;
 
-const uptimeHours = Math.floor(totalUptimeSeconds / 3600);
-const uptimeMinutes = Math.floor((totalUptimeSeconds % 3600) / 60);
-const downtimeHours = Math.floor(totalDowntimeSeconds / 3600);
-const downtimeMinutes = Math.floor((totalDowntimeSeconds % 3600) / 60);
+if (downtimeData.status === "running") {
+displayUptime += currentSession;
+} else if (downtimeData.status === "stopped") {
+displayDowntime += currentSession;
+}
+
+const uptimeHours = Math.floor(displayUptime / 3600);
+const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);
+const downtimeHours = Math.floor(displayDowntime / 3600);
+const downtimeMinutes = Math.floor((displayDowntime % 3600) / 60);
 
 displayDiv.innerHTML = `
 <strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
