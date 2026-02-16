@@ -50,22 +50,11 @@ padding: 10px;
 background: #1e293b;
 border-radius: 5px;
 }
-.error-message {
-color: #ef4444;
-background: #1e293b;
-padding: 10px;
-border-radius: 5px;
-margin: 10px 0;
-display: none;
-}
 </style>
 </head>
 <body>
 
 <h1>Hourly Case Tracker By: Brandon McGirl</h1>
-
-<!-- Error Display -->
-<div id="errorMessage" class="error-message"></div>
 
 <div class="card">
 <h3>Line Selection</h3>
@@ -134,9 +123,9 @@ let downtimeData = {
 status: "stopped",
 totalUptime: 0,
 totalDowntime: 0,
-sessionStart: null
+startTime: null
 };
-const SERVER_URL = "https://mats-ftp-posts-flash.trycloudflare.com";
+const SERVER_URL = "https://week-friendship-nec-logan.trycloudflare.com";
 
 /* ===== DOM ===== */
 const lineSelect = document.getElementById("lineSelect");
@@ -148,15 +137,6 @@ const countInput = document.getElementById("count");
 const suggestionInput = document.getElementById("suggestionInput");
 const suggestionUser = document.getElementById("suggestionUser");
 const downtimeButton = document.getElementById("downtimeButton");
-const errorMessage = document.getElementById("errorMessage");
-
-function showError(msg) {
-    errorMessage.textContent = msg;
-    errorMessage.style.display = "block";
-    setTimeout(() => {
-        errorMessage.style.display = "none";
-    }, 5000);
-}
 
 /* ===== LIVE CLOCK ===== */
 function updateClock() {
@@ -177,7 +157,7 @@ return pw;
 /* ===== SERVER COMMUNICATION ===== */
 async function sendToServer(entry = {}, reset = false, line = "", action = "add", requirePassword = true) {
 if (!line) {
-showError("No line selected!");
+alert("No line selected!");
 return { error: "No line selected" };
 }
 
@@ -186,7 +166,7 @@ if (requirePassword) {
 try {
 password = await getPassword();
 } catch (err) {
-showError("Password is required for this action.");
+alert("Password is required for this action.");
 return { error: "Password required" };
 }
 }
@@ -199,7 +179,7 @@ body: JSON.stringify({ entry, reset, line, action, password })
 });
 
 if (res.status === 403) {
-showError("Wrong password!");
+alert("Wrong password!");
 return { error: "Forbidden" };
 }
 
@@ -207,16 +187,15 @@ const data = await res.json();
 await loadLog();
 return data;
 } catch (err) {
-showError("Network error - check connection");
-console.error("Network error:", err);
-return { error: "Network error" };
+alert("Server unreachable");
+return { error: "Server unreachable" };
 }
 }
 
 /* ===== DOWNTIME TRACKING ===== */
 async function toggleDowntime() {
 if (!currentLine) {
-showError("Select a line first!");
+alert("Select a line first!");
 return;
 }
 
@@ -225,7 +204,7 @@ let password = "";
 try {
 password = await getPassword();
 } catch (err) {
-showError("Password is required for this action.");
+alert("Password is required for this action.");
 return;
 }
 
@@ -239,43 +218,38 @@ body: JSON.stringify({ password })
 });
 
 if (res.status === 403) {
-showError("Wrong password!");
+alert("Wrong password!");
 return;
 }
 
 await loadDowntime();
 } catch (err) {
-showError("Network error with downtime tracking");
-console.error("Downtime error:", err);
+alert("Server unreachable");
 }
 }
 
 async function loadDowntime() {
 try {
 const res = await fetch(`${SERVER_URL}/downtime.json?${Date.now()}`);
-if (!res.ok) {
-throw new Error(`HTTP ${res.status}`);
-}
 const allDowntimeData = await res.json();
 
 const lineDowntime = allDowntimeData[currentLine] || {
 status: "stopped",
 total_uptime: 0,
 total_downtime: 0,
-session_start: null
+start_time: null
 };
 
 downtimeData = {
 status: lineDowntime.status,
 totalUptime: lineDowntime.total_uptime || 0,
 totalDowntime: lineDowntime.total_downtime || 0,
-sessionStart: lineDowntime.session_start
+startTime: lineDowntime.start_time
 };
 
 updateDowntimeDisplay();
 } catch (err) {
 console.error("Downtime load error:", err);
-showError("Failed to load downtime data");
 }
 }
 
@@ -292,22 +266,14 @@ const statusLight = downtimeData.status === "running" ?
 const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
 statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
 
-// Calculate current session time with UTC fix
+// Calculate current session time using local time (EST)
 let currentSession = 0;
-if (downtimeData.sessionStart) {
-try {
-// Force UTC timezone interpretation to fix 2x speed issue
-const startTime = new Date(downtimeData.sessionStart);
-// Convert to UTC time for calculation
-const nowUTC = new Date(Date.now() + (new Date().getTimezoneOffset() * 60000));
-currentSession = (nowUTC - startTime) / 1000; // seconds
-} catch (e) {
-console.error("Error parsing timestamp:", e);
-currentSession = 0;
-}
+if (downtimeData.startTime) {
+const startTime = new Date(downtimeData.startTime);
+currentSession = (new Date() - startTime) / 1000; // seconds
 }
 
-// Calculate display values (FIXED - no calibration factor)
+// Total calculations
 let displayUptime = downtimeData.totalUptime;
 let displayDowntime = downtimeData.totalDowntime;
 
@@ -316,10 +282,6 @@ displayUptime += currentSession;
 } else if (downtimeData.status === "stopped") {
 displayDowntime += currentSession;
 }
-
-// Handle negative or invalid values
-displayUptime = Math.max(0, displayUptime);
-displayDowntime = Math.max(0, displayDowntime);
 
 const uptimeHours = Math.floor(displayUptime / 3600);
 const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);
@@ -353,7 +315,7 @@ const suggestion = suggestionInput.value.trim();
 const user = suggestionUser.value.trim() || "Anonymous";
 
 if (!suggestion) {
-showError("Please enter a suggestion");
+alert("Please enter a suggestion");
 return;
 }
 
@@ -371,10 +333,10 @@ suggestionInput.value = "";
 suggestionUser.value = "";
 } else {
 const errorData = await res.json();
-showError(`Failed to submit suggestion: ${errorData.error || "Unknown error"}`);
+alert(`Failed to submit suggestion: ${errorData.error || "Unknown error"}`);
 }
 } catch (err) {
-showError("Network error - suggestion not submitted");
+alert("Server unreachable - suggestion not submitted");
 console.error("Suggestion error:", err);
 }
 }
@@ -419,9 +381,6 @@ progressContainer.appendChild(progressBar);
 async function loadLog() {
 try {
 const res = await fetch(`${SERVER_URL}/log.json?${Date.now()}`);
-if (!res.ok) {
-throw new Error(`HTTP ${res.status}`);
-}
 const data = await res.json();
 populateLines(data);
 displayLog(data);
@@ -455,17 +414,8 @@ updateSummary();
 updateProgressBar();
 }
 }
-} catch (err) {
-console.error("Load log error:", err);
-// Don't show "Server unreachable" for parsing errors
-if (err.name === 'TypeError' && err.message.includes('fetch')) {
-showError("Network error - check connection");
-} else if (err.message.includes('HTTP')) {
-showError(`Server error: ${err.message}`);
-} else {
-// For parsing errors, still update UI with what we can
-document.getElementById("log").innerHTML = "<small>Data loading issue.</small>";
-}
+} catch {
+document.getElementById("log").innerHTML = "<small>Server not reachable.</small>";
 }
 }
 
@@ -508,10 +458,7 @@ summary.innerHTML = "<small>Waiting for run...</small>";
 /* ===== ADD / DELETE LINE ===== */
 async function addLine() {
 const name = document.getElementById("newLine").value.trim();
-if (!name) {
-showError("Enter a line name");
-return;
-}
+if (!name) return alert("Enter a line name");
 currentLine = name;
 document.getElementById("newLine").value = "";
 
@@ -524,17 +471,11 @@ diff: 0,
 line: currentLine
 };
 
-const data = await sendToServer(entry, false, currentLine, "add", true);
-if (data.error) {
-currentLine = "";
-}
+await sendToServer(entry, false, currentLine, "add", true);
 }
 
 async function deleteLine() {
-if (!currentLine) {
-showError("Select a line first");
-return;
-}
+if (!currentLine) return alert("Select a line first");
 if (!confirm(`Delete line "${currentLine}"?`)) return;
 
 await sendToServer({}, true, currentLine, "delete", true);
@@ -549,17 +490,11 @@ document.getElementById("lastRun").innerHTML = "<small>No previous run</small>";
 
 /* ===== START RUN ===== */
 async function startRun() {
-if (!currentLine) {
-showError("Select a line first");
-return;
-}
+if (!currentLine) return alert("Select a line first");
 material = materialInput.value.trim();
 lastCount = parseInt(startCountInput.value) || 0;
 targetCount = parseInt(targetCountInput.value) || null;
-if (!material) {
-showError("Invalid setup");
-return;
-}
+if (!material) return alert("Invalid setup");
 
 const entry = {
 date: new Date().toDateString(),
@@ -581,16 +516,10 @@ updateProgressBar();
 
 /* ===== ADD ENTRY ===== */
 async function addEntry() {
-if (!currentLine) {
-showError("Start a run first");
-return;
-}
+if (!currentLine) return alert("Start a run first");
 const time = timeInput.value.trim();
 const count = parseInt(countInput.value);
-if (!time || isNaN(count)) {
-showError("Invalid entry");
-return;
-}
+if (!time || isNaN(count)) return alert("Invalid entry");
 
 const diff = count - (lastCount || 0);
 const entry = {
@@ -614,10 +543,7 @@ countInput.value = "";
 
 // ===== END RUN =====
 async function endRun() {
-if (!runStartTime) {
-showError("No active run");
-return;
-}
+if (!runStartTime) return alert("No active run");
 
 const data = await sendToServer({}, false, currentLine, "endrun", true);
 
