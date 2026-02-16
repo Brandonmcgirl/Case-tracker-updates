@@ -50,11 +50,22 @@ padding: 10px;
 background: #1e293b;
 border-radius: 5px;
 }
+.debug-info {
+margin: 10px 0;
+padding: 10px;
+background: #334155;
+border-radius: 5px;
+font-size: 12px;
+display: none;
+}
 </style>
 </head>
 <body>
 
 <h1>Hourly Case Tracker By: Brandon McGirl</h1>
+
+<!-- Debug Toggle -->
+<button onclick="toggleDebug()" style="background: #f59e0b; margin-bottom: 10px;">Toggle Debug Info</button>
 
 <div class="card">
 <h3>Line Selection</h3>
@@ -88,6 +99,9 @@ border-radius: 5px;
 <div id="downtimeDisplay" class="downtime-display"></div>
 </div>
 
+<!-- Debug Info Section -->
+<div id="debugInfo" class="debug-info"></div>
+
 <div class="card">
 <h3>Progress</h3>
 <div id="progressContainer"></div>
@@ -111,6 +125,14 @@ border-radius: 5px;
 <button class="reset" onclick="endRun()">End Of Run</button>
 
 <script>
+// Debug state
+let debugMode = false;
+
+function toggleDebug() {
+    debugMode = !debugMode;
+    document.getElementById("debugInfo").style.display = debugMode ? "block" : "none";
+}
+
 /* ===== STATE ===== */
 let lines = [];
 let currentLine = "";
@@ -254,54 +276,106 @@ console.error("Downtime load error:", err);
 }
 
 function updateDowntimeDisplay() {
-    const statusDiv = document.getElementById("downtimeStatus");
-    const displayDiv = document.getElementById("downtimeDisplay");
+const statusDiv = document.getElementById("downtimeStatus");
+const displayDiv = document.getElementById("downtimeDisplay");
+const debugDiv = document.getElementById("debugInfo");
 
-    downtimeButton.textContent = downtimeData.status === "running" ? "Stop Uptime Tracking" : "Start Uptime Tracking";
-    downtimeButton.className = downtimeData.status === "running" ? "downtime stop" : "downtime";
+downtimeButton.textContent = downtimeData.status === "running" ? "Stop Uptime Tracking" : "Start Uptime Tracking";
+downtimeButton.className = downtimeData.status === "running" ? "downtime stop" : "downtime";
 
-    const statusLight = downtimeData.status === "running" ?
-        '<span class="status-light running"></span>' :
-        '<span class="status-light stopped"></span>';
-    const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
-    statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
+const statusLight = downtimeData.status === "running" ?
+'<span class="status-light running"></span>' :
+'<span class="status-light stopped"></span>';
+const statusText = downtimeData.status === "running" ? "RUNNING" : "STOPPED";
+statusDiv.innerHTML = `${statusLight} Status: ${statusText}`;
 
-    // Calculate current session time properly - NO 'Z' addition needed
-    let currentSession = 0;
-    if (downtimeData.sessionStart) {
-        try {
-            // Backend timestamps are already in ISO format with timezone info
-            const startTime = new Date(downtimeData.sessionStart);
-            currentSession = (Date.now() - startTime.getTime()) / 1000; // seconds
-        } catch (e) {
-            console.error("Error parsing timestamp:", e);
-            currentSession = 0;
-        }
-    }
+// Calculate current session time properly
+let currentSession = 0;
+if (downtimeData.sessionStart) {
+try {
+// Handle different timestamp formats
+let startTime;
+if (downtimeData.sessionStart.endsWith('Z') || downtimeData.sessionStart.includes('+') || downtimeData.sessionStart.includes('-')) {
+// Already has timezone info
+startTime = new Date(downtimeData.sessionStart);
+} else {
+// Assume UTC
+startTime = new Date(downtimeData.sessionStart + 'Z');
+}
+currentSession = (Date.now() - startTime.getTime()) / 1000; // seconds
+} catch (e) {
+console.error("Error parsing timestamp:", e);
+currentSession = 0;
+}
+}
 
-    // Calculate display values
-    let displayUptime = downtimeData.totalUptime;
-    let displayDowntime = downtimeData.totalDowntime;
+// Calculate display values (ORIGINAL - for comparison)
+let originalUptime = downtimeData.totalUptime;
+let originalDowntime = downtimeData.totalDowntime;
 
+if (downtimeData.status === "running") {
+originalUptime += currentSession;
+} else if (downtimeData.status === "stopped") {
+originalDowntime += currentSession;
+}
+
+// Calculate calibrated values (TRY different factors)
+const factors = [2.0, 2.5, 2.67, 3.0, 3.5, 4.0];
+let debugHtml = `<strong>DEBUG INFO:</strong><br>`;
+debugHtml += `Session Start: ${downtimeData.sessionStart}<br>`;
+debugHtml += `Current Session (raw): ${currentSession.toFixed(2)} seconds<br>`;
+debugHtml += `Total Uptime (raw): ${downtimeData.totalUptime.toFixed(2)} seconds<br>`;
+debugHtml += `Total Downtime (raw): ${downtimeData.totalDowntime.toFixed(2)} seconds<br><br>`;
+
+debugHtml += `<strong>CALIBRATION TEST:</strong><br>`;
+factors.forEach(factor => {
+    let testUptime = downtimeData.totalUptime / factor;
+    let testDowntime = downtimeData.totalDowntime / factor;
+    
     if (downtimeData.status === "running") {
-        displayUptime += currentSession /2;
+        testUptime += currentSession / factor;
     } else if (downtimeData.status === "stopped") {
-        displayDowntime += currentSession /2;
+        testDowntime += currentSession / factor;
     }
+    
+    const uptimeMin = Math.floor(testUptime / 60);
+    const downtimeMin = Math.floor(testDowntime / 60);
+    
+    debugHtml += `÷${factor}: Uptime=${uptimeMin}m Downtime=${downtimeMin}m<br>`;
+});
 
-    // Handle negative or invalid values
-    displayUptime = Math.max(0, displayUptime);
-    displayDowntime = Math.max(0, displayDowntime);
+if (downtimeData.status === "running") {
+    debugHtml += `<br><strong>NOTE:</strong> Currently tracking UPTIME<br>`;
+} else if (downtimeData.status === "stopped") {
+    debugHtml += `<br><strong>NOTE:</strong> Currently tracking DOWNTIME<br>`;
+}
 
-    const uptimeHours = Math.floor(displayUptime / 3600);
-    const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);
-    const downtimeHours = Math.floor(displayDowntime / 3600);
-    const downtimeMinutes = Math.floor((displayDowntime % 3600) / 60);
+debugDiv.innerHTML = debugHtml;
 
-    displayDiv.innerHTML = `
-        <strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
-        <strong>Downtime:</strong> ${downtimeHours}h ${downtimeMinutes}m<br>
-    `;
+// Use calibrated calculation (default to 2.67 based on your 3→4 min observation)
+const CALIBRATION_FACTOR = 2.67;
+let displayUptime = downtimeData.totalUptime / CALIBRATION_FACTOR;
+let displayDowntime = downtimeData.totalDowntime / CALIBRATION_FACTOR;
+
+if (downtimeData.status === "running") {
+    displayUptime += currentSession / CALIBRATION_FACTOR;
+} else if (downtimeData.status === "stopped") {
+    displayDowntime += currentSession / CALIBRATION_FACTOR;
+}
+
+// Handle negative or invalid values
+displayUptime = Math.max(0, displayUptime);
+displayDowntime = Math.max(0, displayDowntime);
+
+const uptimeHours = Math.floor(displayUptime / 3600);
+const uptimeMinutes = Math.floor((displayUptime % 3600) / 60);
+const downtimeHours = Math.floor(displayDowntime / 3600);
+const downtimeMinutes = Math.floor((displayDowntime % 3600) / 60);
+
+displayDiv.innerHTML = `
+<strong>Uptime:</strong> ${uptimeHours}h ${uptimeMinutes}m<br>
+<strong>Downtime:</strong> ${downtimeHours}h ${downtimeMinutes}m<br>
+`;
 }
 
 /* ===== HELPERS ===== */
