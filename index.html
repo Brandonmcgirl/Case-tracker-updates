@@ -353,7 +353,7 @@ if (downtimeData.status === "running") {
 debugDiv.innerHTML = debugHtml;
 
 // Use calibrated calculation (default to 2.67 based on your 3→4 min observation)
-const CALIBRATION_FACTOR = 2.67;
+const CALIBRATION_FACTOR = 2;
 let displayUptime = downtimeData.totalUptime / CALIBRATION_FACTOR;
 let displayDowntime = downtimeData.totalDowntime / CALIBRATION_FACTOR;
 
